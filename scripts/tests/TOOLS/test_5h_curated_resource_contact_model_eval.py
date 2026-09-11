@@ -1,19 +1,31 @@
 #!/usr/bin/env python3
 """Executable, model-backed issue #539 evaluation (requires Compose + provider)."""
 from __future__ import annotations
-import argparse, hashlib, json, os, re, subprocess, time, uuid
+import argparse, hashlib, json, math, os, re, subprocess, time, unicodedata, uuid
 from collections import namedtuple
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 import requests
 
+from scripts.benches.synthetic_environment import (
+    is_empty_synthetic_environment,
+    validate_loopback_api_base,
+    verify_http_target,
+    verify_empty_synthetic_environment,
+)
+
+RUNNER_CODE_HASH = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 ROOT = Path(__file__).parents[3]
 COMPOSE = ["docker", "compose"]
 if os.environ.get("ENCLAVE_EVAL_COMPOSE_ENV_FILE"):
     COMPOSE.extend(["--env-file", os.environ["ENCLAVE_EVAL_COMPOSE_ENV_FILE"]])
 COMPOSE.extend(["-f", "docker-compose.infra.yml", "-f", "docker-compose.app.yml"])
-ORG_NAME = "Issue 539 Legal Aid"
+# Keep fixture names and pointers neutral.  In particular, the source state is
+# deliberately not called "stale" or "fresh" in prompts or model-visible
+# values; that would tell the model which answer the evaluator expects.
+ORG_NAME = "Northbridge Legal Aid"
+CONTACT_MODALITIES = ("email", "phone", "url", "address", "secure_channel")
+SOURCE_STATES = ("baseline", "updated")
 
 
 PersonaSpec = namedtuple(
@@ -50,40 +62,124 @@ CONTACT_FOLLOWUPS = {
         "secure_channel": "¿Me das el canal seguro?",
     },
 }
-CONTACT_REPLAY_CASES = {
-    "en": tuple(CONTACT_FOLLOWUPS["en"].items()),
-    # Spanish is an explicit replay dimension, not a claim about any live
-    # customer's configured language. Keep the reported exact prompt stable.
-    "es": (("email", "¿Me puedes dar el email?"),),
-}
 INVENTORY_LIMIT = 10
 INVENTORY_NAMES = tuple(
-    f"Issue 539 Inventory {index:02d}"
+    f"Directory Sample {index:02d}"
     for index in range(1, INVENTORY_LIMIT + 2)
 )
-CASES = [
-    ("en", "email", "What is the email address?", "Can you give me the email?", 0),
-    ("es", "email", "¿Cuál es el correo electrónico?", "¿Me puedes dar el email?", 1),
-    ("en", "phone", "What is the phone number?", "Can you give me the phone number?", 0),
-    ("es", "phone", "¿Cuál es el teléfono?", "¿Me das el número de teléfono?", 1),
-    ("en", "url", "What is the website?", "Can you give me the website?", 0),
-    ("es", "url", "¿Cuál es el sitio web?", "¿Me das el sitio web?", 1),
-    ("en", "address", "What is the address?", "Can you give me the address?", 0),
-    ("es", "address", "¿Cuál es la dirección?", "¿Me das la dirección?", 1),
-    ("en", "secure_channel", "What secure channel is listed?", "Can you give me the secure channel?", 0),
-    ("es", "secure_channel", "¿Cuál es el canal seguro?", "¿Me das el canal seguro?", 1),
-]
+def fixture_contacts(suffix: str = "unit") -> tuple[dict[str, str], dict[str, str]]:
+    """Return two distinct, neutral contact snapshots for one evaluation."""
+    marker = hashlib.sha256(str(suffix).encode()).hexdigest()[:8]
+    baseline = {
+        "email": f"relay-{marker}-a@example.test",
+        "phone": "+1-202-555-0147",
+        "url": f"https://relay-{marker}-a.example.test",
+        "address": "17 Meridian Avenue, Mexico City",
+        "secure_channel": f"relay-{marker}-a-secure",
+    }
+    updated = {
+        "email": f"relay-{marker}-b@example.test",
+        "phone": "+1-202-555-0183",
+        "url": f"https://relay-{marker}-b.example.test",
+        "address": "29 Harbor Road, Mexico City",
+        "secure_channel": f"relay-{marker}-b-secure",
+    }
+    return baseline, updated
 
 
-def initial_message(language: str, initial: str) -> str:
-    if language == "es":
-        return f"{ORG_NAME} está en México y ofrece ayuda legal. {initial} Responde en español."
-    return f"{ORG_NAME} is in Mexico and provides legal help. {initial} Answer in English."
+def fixture_manifest(
+    baseline: dict[str, str], updated: dict[str, str], *, inventory_names: tuple[str, ...] = INVENTORY_NAMES
+) -> dict[str, Any]:
+    """Describe every synthetic model-visible fixture and bind it to a hash."""
+    manifest = {
+        "schema": "neutral-contact-v3",
+        "organization": ORG_NAME,
+        "languages": list(REPLAY_LANGUAGES),
+        "modalities": list(CONTACT_MODALITIES),
+        "baseline_contact": dict(baseline),
+        "updated_contact": dict(updated),
+        "inventory_names": list(inventory_names),
+        "inventory_limit": INVENTORY_LIMIT,
+    }
+    manifest["hash"] = hashlib.sha256(
+        json.dumps(manifest, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+    return manifest
 
 
-def context_free_followup(text: str) -> bool:
-    forbidden = (ORG_NAME, "Acme Legal Aid", "Mexico", "legal help", "legal aid")
-    return not any(term.casefold() in text.casefold() for term in forbidden)
+def journey_case_id(persona: str, language: str, journey: str, modality: str, turn: int) -> str:
+    """Stable ID for a planned, reviewable turn in the contact matrix."""
+    return f"contact::{persona}::{language}::{journey}::{modality}::turn{turn}"
+
+
+def inventory_case_id(persona: str, language: str, page: str) -> str:
+    return f"inventory::{persona}::{language}::{page}"
+
+
+def expected_case_ids(
+    persona_filter: str | None = None,
+    *,
+    inventory_only: bool = False,
+    contact_only: bool = False,
+    language_filter: str | None = None,
+    modality_filter: str | None = None,
+    journey_filter: str | None = None,
+    profile: str = "full",
+) -> list[str]:
+    """Return the exact plan; missing or duplicate evidence is a harness failure."""
+    personas = [p for p in PERSONAS if persona_filter is None or p.key == persona_filter]
+    languages = [l for l in REPLAY_LANGUAGES if language_filter is None or l == language_filter]
+    modalities = [m for m in CONTACT_MODALITIES if modality_filter is None or m == modality_filter]
+    journeys = [j for j in ("changed", "unchanged") if journey_filter is None or j == journey_filter]
+    if profile == "smoke":
+        personas = [p for p in personas if p.key == "generic_user"] or personas[:1]
+        languages = [l for l in languages if l == "en"] or languages[:1]
+        modalities = [m for m in modalities if m == "email"] or modalities[:1]
+    ids: list[str] = []
+    if not inventory_only:
+        for persona in personas:
+            for language in languages:
+                for journey in journeys:
+                    for modality in modalities:
+                        for turn in (1, 2):
+                            ids.append(journey_case_id(persona.key, language, journey, modality, turn))
+        if persona_filter in (None, "generic_user") and not journey_filter and not modality_filter:
+            if profile != "smoke":
+                ids.append("control::generic_user::no_tools::email")
+    if not contact_only:
+        inventory_language = language_filter or "en"
+        for persona in personas:
+            ids.extend(
+                [
+                    inventory_case_id(persona.key, inventory_language, "page1"),
+                    inventory_case_id(persona.key, inventory_language, "page2"),
+                ]
+            )
+    return ids
+
+
+def contact_prompt(language: str, modality: str, *, turn: int) -> str:
+    prompts = {
+        "en": {
+            "email": "What email address can I use?",
+            "phone": "What phone number can I call?",
+            "url": "What website should I open?",
+            "address": "What address should I use?",
+            "secure_channel": "What secure channel is available?",
+        },
+        "es": {
+            "email": "¿Qué correo electrónico puedo usar?",
+            "phone": "¿Qué número de teléfono puedo llamar?",
+            "url": "¿Qué sitio web debo abrir?",
+            "address": "¿Qué dirección debo usar?",
+            "secure_channel": "¿Qué canal seguro está disponible?",
+        },
+    }
+    prefix = "Northbridge Legal Aid provides legal support. " if language == "en" else "Northbridge Legal Aid ofrece apoyo legal. "
+    if turn == 1:
+        return prefix + prompts[language][modality] + (" Responde en español." if language == "es" else " Answer in English.")
+    followup = CONTACT_FOLLOWUPS[language][modality]
+    return followup + (" Responde en español." if language == "es" else " Answer in English.")
 
 def expect(label: str, ok: bool, detail: str = "") -> bool:
     print(f"[{'PASS' if ok else 'FAIL'}] {label}{': ' + detail if detail and not ok else ''}")
@@ -93,6 +189,12 @@ def backend_python(source: str) -> list[str]:
     p = subprocess.run([*COMPOSE, "exec", "-T", "core-backend", "python", "-c", source], cwd=ROOT, capture_output=True, text=True, timeout=45)
     if p.returncode: raise RuntimeError(p.stderr.strip() or "backend helper failed")
     return [x.strip() for x in p.stdout.splitlines() if x.strip()]
+
+
+class _ComposeBackendRunner:
+    def run_backend_python(self, source: str, timeout: int = 120) -> str:
+        return "\n".join(backend_python(source))
+
 
 def derive_ephemeral_admin_pubkey(suffix: str) -> str:
     """Derive a deterministic valid secp256k1 x-only public key marker."""
@@ -119,6 +221,7 @@ def new_fixture_journal(suffix: str) -> dict[str, Any]:
         "admin": None,
         "admin_pubkey": ephemeral_pubkey,
         "owns_admin": None,
+        "replaced_admin_pubkeys": [],
         "users": [],
         "configured_type_ids": [],
         "global_tool_ids_original": None,
@@ -137,16 +240,38 @@ def mint(
         fixtures = new_fixture_journal(str(int(time.time() * 1000)))
     suffix = str(fixtures["suffix"])
     ephemeral_pubkey = str(fixtures["ephemeral_admin_pubkey"])
+    admin_rows = backend_runner(
+        """import database, json
+def usable(item):
+    try:
+        return len(bytes.fromhex(str(item.get('pubkey') or ''))) == 32
+    except (TypeError, ValueError):
+        return False
+print(json.dumps([item.get('pubkey') for item in database.list_admins() if not usable(item)]))"""
+    )
+    invalid_admins = json.loads(admin_rows[-1]) if admin_rows else []
+    if not isinstance(invalid_admins, list) or any(not isinstance(value, str) for value in invalid_admins):
+        raise RuntimeError("could not journal invalid admin markers")
+    fixtures["replaced_admin_pubkeys"] = list(invalid_admins)
     rows = backend_runner(
         f'''import auth, database, json
 admins = database.list_admins()
-owns_admin = not admins
+def usable_admin(item):
+    try:
+        return len(bytes.fromhex(str(item.get("pubkey") or ""))) == 32
+    except (TypeError, ValueError):
+        return False
+existing = next((item for item in admins if usable_admin(item)), None)
+owns_admin = existing is None
 ephemeral_pubkey = {ephemeral_pubkey!r}
 if owns_admin:
+    for invalid in {invalid_admins!r}:
+        if database.get_admin_by_pubkey(invalid) is not None:
+            database.remove_admin(invalid)
     database.add_admin(ephemeral_pubkey)
     a = database.get_admin_by_pubkey(ephemeral_pubkey)
 else:
-    a = admins[0]
+    a = existing
 print(json.dumps({{"admin": auth.create_admin_session_token(a["id"], a["pubkey"], int(a.get("session_nonce", 0) or 0)), "admin_pubkey": a["pubkey"], "owns_admin": owns_admin}}))'''
     )
     admin = json.loads(rows[-1])
@@ -183,7 +308,16 @@ print(json.dumps({{"token": auth.create_session_token(user_id, email), "user_id"
     return fixtures
 
 def req(base: str, token: str, method: str, path: str, payload: dict[str, Any] | None = None, timeout: float = 180) -> requests.Response:
-    return requests.request(method, base.rstrip("/") + path, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json=payload, timeout=timeout)
+    with requests.Session() as session:
+        session.trust_env = False
+        return session.request(
+            method,
+            base.rstrip("/") + path,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=timeout,
+            allow_redirects=False,
+        )
 
 def parse_sse(raw: str) -> list[dict[str, Any]]:
     out = []
@@ -301,9 +435,15 @@ def evidence_entry(
     trace: Any,
     passed: bool,
     detail: str,
+    case_id: str | None = None,
+    journey_id: str | None = None,
+    turn_index: int | None = None,
+    prompt: str | None = None,
+    context: dict[str, Any] | None = None,
+    dimensions: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return a privacy-safe model-evaluation record without prompts or raw traces."""
-    return {
+    """Return reviewable synthetic evidence without prompts or raw provider traces."""
+    entry = {
         "persona": persona,
         "case": case,
         "answer": answer,
@@ -316,20 +456,110 @@ def evidence_entry(
         "passed": passed,
         "detail": detail,
     }
+    if case_id is not None:
+        entry["case_id"] = case_id
+    if journey_id is not None:
+        entry["journey_id"] = journey_id
+    if turn_index is not None:
+        entry["turn_index"] = turn_index
+    if prompt is not None:
+        entry["prompt"] = prompt
+    if context is not None:
+        entry["context"] = context
+    if dimensions is not None:
+        entry["dimensions"] = dimensions
+    observed_model = trace.get("_evaluation_model") if isinstance(trace, dict) else None
+    if isinstance(observed_model, str) and observed_model:
+        entry["model"] = observed_model
+    return entry
 
 
-def score_contact_turn(
+def exact_pointer_match(answer: str, expected: str, modality: str | None = None) -> bool:
+    """Match a complete pointer, rejecting suffix/prefix substring spoofs."""
+    if not isinstance(expected, str) or not expected:
+        return False
+    if modality == "email":
+        candidates = [
+            candidate.rstrip(".,;:")
+            for candidate in re.findall(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", answer)
+        ]
+        return expected in candidates
+    if modality == "url":
+        candidates = re.findall(r"https?://[^\s)\]>\"']+", answer)
+        # Markdown emphasis/backticks are presentation wrappers, not URL
+        # content. Strip only terminal punctuation/wrappers; path and host
+        # suffixes remain part of the candidate and therefore fail closed.
+        return any(candidate.rstrip(".,;:*_`") == expected for candidate in candidates)
+    if modality == "phone":
+        expected_digits = re.sub(r"\D", "", expected)
+        candidates = re.findall(r"(?<!\d)\+?\d[\d\s().-]{7,}\d(?!\d)", answer)
+        return any(re.sub(r"\D", "", candidate) == expected_digits for candidate in candidates)
+    if modality == "address":
+        # Keep the street and number exact. Only punctuation spacing and the
+        # one fixture-approved Spanish city alias are normalized.
+        variants = [expected]
+        if expected.endswith(", Mexico City"):
+            variants.append(expected[:-len("Mexico City")] + "Ciudad de México")
+
+        def normalize_address(value: str) -> str:
+            value = unicodedata.normalize("NFKC", value).casefold()
+            value = re.sub(r"[,.;]", " ", value)
+            return re.sub(r"\s+", " ", value).strip()
+
+        normalized_answer = normalize_address(answer)
+        return any(
+            re.search(
+                rf"(?<![\w-]){re.escape(normalize_address(variant))}(?![\w-])",
+                normalized_answer,
+            )
+            for variant in variants
+        )
+    escaped = re.escape(expected)
+    return bool(re.search(rf"(?<![\w-]){escaped}(?![\w-])", answer))
+
+
+def score_contact_dimensions(
     answer: str,
     trace: Any,
-    fresh: str,
-    stale_contacts: dict[str, str],
+    *,
+    expected: str,
+    old_contacts: dict[str, str],
+    lookup_required: bool,
     tool_enabled: bool = True,
-) -> tuple[bool, str]:
-    fresh_ok = fresh in answer
-    stale_ok = all(value not in answer for value in stale_contacts.values())
-    tool_ok = used_curated_resources(trace) if tool_enabled else not used_curated_resources(trace)
-    answer_ok = fresh_ok if tool_enabled else not fresh_ok
-    return answer_ok and stale_ok and tool_ok, f"fresh={fresh_ok} stale_absent={stale_ok} tool={tool_ok}"
+    modality: str | None = None,
+) -> dict[str, Any]:
+    """Score independent contact dimensions without conflating tool and answer quality."""
+    exact = exact_pointer_match(answer, expected, modality)
+    old_literal_present = [
+        key for key, value in old_contacts.items() if isinstance(value, str) and value in answer
+    ]
+    old_absent = not old_literal_present
+    used = used_curated_resources(trace)
+    lookup_passed = (not used) if not tool_enabled else (used if lookup_required else True)
+    return {
+        "exact_pointer": {
+            "passed": exact if tool_enabled else not exact,
+            "expected": expected if tool_enabled else None,
+            "observed": exact,
+        },
+        "current_old": {
+            "passed": old_absent,
+            "forbidden_values": len(old_contacts),
+            "observed_absent": old_absent,
+            "old_literal_present": old_literal_present,
+            "needs_semantic_review": bool(old_literal_present),
+        },
+        "lookup": {
+            "passed": lookup_passed,
+            "required": lookup_required,
+            "used": used,
+            "status": "required" if lookup_required else "not_required",
+        },
+        "quality_passed": bool(
+            (exact if tool_enabled else not exact)
+            and lookup_passed
+        ),
+    }
 
 
 def score_inventory_turn(
@@ -368,18 +598,9 @@ def score_inventory_turn(
         r"\bsiguiente\s+p[aá]gina\b",
         r"\brecursos?\s+restantes\b",
     )
-    complete_claim = has(
-        r"\ball\b",
-        r"\bevery\b",
-        r"\bcomplete\b",
-        r"\btod[oa]s\b",
-        r"\bcomplet[oa]s?\b",
-        r"\bconjunto\s+completo\b",
-    )
+    complete_claim = has(r"\ball\b", r"\bevery\b", r"\bcomplete\b", r"\btod[oa]s\b", r"\bcomplet[oa]s?\b", r"\bconjunto\s+completo\b")
     qualified_or_negated = has(
-        r"\bnot\s+all\b",
-        r"\bnot\s+(?:a\s+)?complete\b",
-        r"\bmay\s+not\s+be\s+(?:all|complete)\b",
+        r"\bnot\s+all\b", r"\bnot\s+(?:a\s+)?complete\b", r"\bmay\s+not\s+be\s+(?:all|complete)\b",
         r"\b(?:cannot|can\s+not|can['’]t|unable\s+to)\s+(?:confirm|verify)[^.]{0,80}\b(?:no\s+more|no\s+additional\s+pages?|all|complete)\b",
         r"\bno\s+puedo\s+(?:confirmar|verificar)[^.]{0,80}\b(?:no\s+hay\s+m[aá]s|tod[oa]s|complet[oa])\b",
         r"\bno\s+son\s+tod[oa]s\b",
@@ -387,13 +608,14 @@ def score_inventory_turn(
 
     def mentioned_names(value: str) -> set[str]:
         return {
-            name
+            name for name in INVENTORY_NAMES
+            if re.search(rf"(?<![A-Za-z0-9]){re.escape(name)}(?![A-Za-z0-9])", value, flags=re.IGNORECASE)
+        }
+
+    def name_counts(value: str) -> dict[str, int]:
+        return {
+            name: len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(name)}(?![A-Za-z0-9])", value, flags=re.IGNORECASE))
             for name in INVENTORY_NAMES
-            if re.search(
-                rf"(?<![A-Za-z0-9]){re.escape(name)}(?![A-Za-z0-9])",
-                value,
-                flags=re.IGNORECASE,
-            )
         }
 
     answer_names = mentioned_names(answer)
@@ -402,123 +624,74 @@ def score_inventory_turn(
     expected_names = set(INVENTORY_NAMES)
     expected_first_page = set(INVENTORY_NAMES[:INVENTORY_LIMIT])
     expected_last_page = {final_name}
-    count = len(INVENTORY_NAMES)
-    scoped = has(
-        r"\bmatching\b",
-        r"\bsupplied\s+filters?\b",
-        r"\bnames?\s+start",
-        r"\bcoinciden\b",
-        r"\bfiltros?\b",
-        r"\bnombres?\s+empiezan\b",
-        r"\bque\s+empiezan\b",
-    )
-    bounded_metadata = {
-        "returned_count": INVENTORY_LIMIT,
-        "total_count": count,
-        "has_more": True,
-        "next_offset": INVENTORY_LIMIT,
-    }
-    terminal_one_metadata = {
-        "returned_count": 1,
-        "total_count": count,
-        "has_more": False,
-        "next_offset": None,
-    }
-    terminal_zero_metadata = {
-        "returned_count": 0,
-        "total_count": count,
-        "has_more": False,
-        "next_offset": None,
-    }
-
-    def contains_sequence(records: list[dict[str, Any]], expected: list[dict[str, Any]]) -> bool:
-        position = 0
-        for record in records:
-            if position < len(expected) and record == expected[position]:
-                position += 1
-        return position == len(expected)
+    expected_count = len(INVENTORY_NAMES)
+    scoped = has(r"\bmatching\b", r"\bsupplied\s+filters?\b", r"\bnames?\s+start", r"\bcoinciden\b", r"\bfiltros?\b", r"\bnombres?\s+empiezan\b", r"\bque\s+empiezan\b")
 
     all_metadata = [*previous_metadata, *metadata]
-    authoritative_counts = {count}
-    authoritative_pairs: set[tuple[int, int]] = set()
-    authoritative_offsets: set[int] = set()
-    authoritative_remaining_counts: set[int] = set()
-    for record in all_metadata:
-        authoritative_counts.add(record["returned_count"])
-        authoritative_counts.add(record["total_count"])
-        authoritative_pairs.add((record["returned_count"], record["total_count"]))
-        if record["next_offset"] is not None:
-            authoritative_offsets.add(record["next_offset"])
-        if record["has_more"]:
-            consumed = record["next_offset"]
-            if consumed is None:
-                consumed = record["returned_count"]
-            authoritative_remaining_counts.add(max(record["total_count"] - consumed, 0))
-        else:
-            authoritative_remaining_counts.add(0)
-    if contains_sequence(metadata, [bounded_metadata, terminal_one_metadata]) or contains_sequence(
-        previous_metadata, [bounded_metadata, terminal_one_metadata]
-    ):
-        authoritative_pairs.add((count, count))
-    if terminal_zero_metadata in metadata and contains_sequence(
-        previous_metadata, [bounded_metadata, terminal_one_metadata]
-    ):
-        authoritative_offsets.add(count)
-
+    actual_totals = {record["total_count"] for record in all_metadata}
+    actual_counts = {record["returned_count"] for record in all_metadata}
+    authoritative_counts = actual_totals | actual_counts | {expected_count}
+    authoritative_pairs = {(record["returned_count"], record["total_count"]) for record in all_metadata}
+    authoritative_offsets = {record["next_offset"] for record in all_metadata if record["next_offset"] is not None}
+    authoritative_offsets.add(expected_count)
+    authoritative_remaining_counts = {
+        max(record["total_count"] - int(record["next_offset"]), 0)
+        for record in all_metadata
+        if record["has_more"] and record["next_offset"] is not None
+    }
     claimed_pairs = {
         (int(returned), int(total))
-        for pattern in (
-            r"\b(\d+)\s*/\s*(\d+)\b",
-            r"\b(\d+)\s+(?:of|de)\s+(\d+)\b",
-        )
+        for pattern in (r"\b(\d+)\s*/\s*(\d+)\b", r"\b(\d+)\s+(?:of|de)\s+(\d+)\b")
         for returned, total in re.findall(pattern, normalized)
     }
     claimed_offsets = {
-        int(offset)
-        for offset in re.findall(
-            r"\b(?:next\s+)?(?:offset|desplazamiento)(?:\s+(?:is|es|at|en))?\s*[:=]?\s*(\d+)\b",
-            normalized,
-        )
+        int(offset) for offset in re.findall(r"\b(?:next\s+)?(?:offset|desplazamiento)(?:\s+(?:is|es|at|en))?\s*[:=]?\s*(\d+)\b", normalized)
     }
     claimed_counts = {
-        int(value)
-        for value in re.findall(
-            r"\b(\d+)\s+(?:matching\s+|coincidentes?\s+)?(?:ready\s+)?(?:resources?|recursos?)\b",
-            normalized,
-        )
+        int(value) for value in re.findall(r"\b(\d+)\s+(?:matching\s+|coincidentes?\s+)?(?:ready\s+)?(?:resources?|recursos?)\b", normalized)
     }
     claimed_remaining_counts = {
-        int(value)
-        for value in re.findall(
-            r"\b(\d+)\s+(?:more\s+(?:matching\s+)?(?:resources?|results?)|(?:recursos?|resultados?)\s+m[aá]s)\b",
-            normalized,
-        )
+        int(value) for value in re.findall(r"\b(\d+)\s+(?:more\s+(?:matching\s+)?(?:resources?|results?)|(?:recursos?|resultados?)\s+m[aá]s)\b", normalized)
     }
+    terminal_proof = (
+        bool(all_metadata)
+        and any(record["has_more"] is False for record in all_metadata)
+        and sum(record["returned_count"] for record in all_metadata) >= expected_count
+    )
+    # A displayed-subset count is justified only when the answer names every
+    # expected target and the provider trace proves it reached a terminal page.
+    justified_subset_pairs = (
+        {(expected_count, total) for total in actual_totals}
+        if terminal_proof and combined_names == expected_names
+        else set()
+    )
+    allowed_pairs = authoritative_pairs | justified_subset_pairs
+    metadata_consistent = all(
+        (record["has_more"] and record["next_offset"] is not None and record["next_offset"] < record["total_count"])
+        or (not record["has_more"] and record["next_offset"] is None)
+        for record in all_metadata
+    )
     wrong_numeric_claim = (
-        not claimed_pairs.issubset(authoritative_pairs)
+        not claimed_pairs.issubset(allowed_pairs)
         or not claimed_offsets.issubset(authoritative_offsets)
         or not claimed_counts.issubset(authoritative_counts)
-        or not claimed_remaining_counts.issubset(authoritative_remaining_counts)
+        or not claimed_remaining_counts.issubset(authoritative_remaining_counts | {0})
+        or not metadata_consistent
     )
+    duplicate_names = any(count > 1 for count in name_counts(answer).values())
+    broad_total_ok = bool(actual_totals) and min(actual_totals) >= expected_count
 
     if continuation:
         if previous_names == expected_first_page:
             page_ok = (
                 answer_names == expected_last_page
                 and no_more_claim
-                and bounded_metadata in previous_metadata
-                and terminal_one_metadata in metadata
+                and bool(metadata)
+                and metadata[-1]["has_more"] is False
+                and broad_total_ok
             )
         elif previous_names == expected_names:
-            page_ok = (
-                not answer_names
-                and no_more_claim
-                and contains_sequence(
-                    previous_metadata,
-                    [bounded_metadata, terminal_one_metadata],
-                )
-                and terminal_zero_metadata in metadata
-            )
+            page_ok = not answer_names and no_more_claim and bool(metadata) and metadata[-1]["has_more"] is False and broad_total_ok
         else:
             page_ok = False
     else:
@@ -526,52 +699,76 @@ def score_inventory_turn(
             answer_names == expected_first_page
             and final_name not in answer_names
             and positive_more
-            and bounded_metadata in metadata
+            and bool(metadata)
+            and metadata[0]["returned_count"] >= len(expected_first_page)
+            and metadata[0]["has_more"] is True
+            and broad_total_ok
         )
         scoped_complete = (
             answer_names == expected_names
             and final_name in answer_names
             and scoped
             and complete_claim
-            and contains_sequence(metadata, [bounded_metadata, terminal_one_metadata])
+            and bool(metadata)
+            and broad_total_ok
+            and terminal_proof
         )
         page_ok = exact_bounded_page or scoped_complete
     unsupported_complete_claim = complete_claim and combined_names != expected_names
-    passed = (
-        tool_ok
-        and page_ok
-        and not unsupported_complete_claim
-        and not qualified_or_negated
-        and not wrong_numeric_claim
-    )
-    return passed, f"tool={tool_ok} metadata={len(metadata)} previous_metadata={len(previous_metadata)} page={page_ok} names={len(answer_names)} new_names={len(answer_names - previous_names)} combined_names={len(combined_names)} unsupported_complete={unsupported_complete_claim} qualified={qualified_or_negated} wrong_numeric={wrong_numeric_claim}"
+    passed = tool_ok and page_ok and not unsupported_complete_claim and not qualified_or_negated and not wrong_numeric_claim and not duplicate_names
+    return passed, f"tool={tool_ok} metadata={len(metadata)} previous_metadata={len(previous_metadata)} page={page_ok} names={len(answer_names)} new_names={len(answer_names - previous_names)} combined_names={len(combined_names)} backend_totals={sorted(actual_totals)} unsupported_complete={unsupported_complete_claim} qualified={qualified_or_negated} wrong_numeric={wrong_numeric_claim} duplicate_names={duplicate_names}"
 
 
-def expected_case_count(
-    persona_filter: str | None,
-    inventory_only: bool,
-    contact_only: bool,
-    language_filter: str | None = None,
-) -> int:
-    selected = [
-        persona for persona in PERSONAS if persona_filter is None or persona.key == persona_filter
-    ]
-    languages = [
-        language
-        for language in REPLAY_LANGUAGES
-        if language_filter is None or language == language_filter
-    ]
-    contact_cases = 0 if inventory_only else len(selected) * sum(
-        1 + len(CONTACT_REPLAY_CASES[language]) for language in languages
-    )
-    inventory_cases = 0 if contact_only else len(selected) * 2
-    disabled_control = (
-        1
-        if not inventory_only
-        and any(persona.key == "generic_user" for persona in selected)
-        else 0
-    )
-    return contact_cases + inventory_cases + disabled_control
+def validate_case_ids(evidence: list[dict[str, Any]], expected_ids: list[str]) -> tuple[bool, str]:
+    """Fail closed when a run silently omits or repeats a planned turn."""
+    expected = list(expected_ids)
+    observed = [item.get("case_id") for item in evidence]
+    if any(not isinstance(case_id, str) or not case_id for case_id in observed):
+        return False, "missing case_id"
+    duplicates = sorted({case_id for case_id in observed if observed.count(case_id) > 1})
+    missing = sorted(set(expected) - set(observed))
+    unexpected = sorted(set(observed) - set(expected))
+    if duplicates or missing or unexpected or len(observed) != len(expected):
+        return False, f"duplicates={duplicates} missing={missing} unexpected={unexpected} observed={len(observed)} expected={len(expected)}"
+    return True, "case_ids_complete"
+
+
+def journey_identity_from_case_id(case_id: str) -> str:
+    parts = case_id.split("::")
+    if not parts:
+        return case_id
+    if parts[0] == "contact":
+        parts = [part for part in parts if not part.startswith("turn")]
+    elif parts[0] == "inventory":
+        parts = [part for part in parts if part not in {"page1", "page2"}]
+    elif parts[0] == "control":
+        # The control case has an explicit modality suffix, while its
+        # ``no_tools`` journey marker is itself part of the identity.
+        if len(parts) >= 2 and parts[-1] == "email":
+            parts = parts[:-1]
+    return "::".join(parts)
+
+
+def journey_denominators(expected_ids: list[str], evidence: list[dict[str, Any]]) -> dict[str, Any]:
+    planned: dict[str, set[str]] = {}
+    for case_id in expected_ids:
+        planned.setdefault(journey_identity_from_case_id(case_id), set()).add(case_id)
+    observed: dict[str, set[str]] = {}
+    for item in evidence:
+        case_id = item.get("case_id")
+        if isinstance(case_id, str):
+            observed_id = str(item.get("journey_id") or case_id)
+            observed.setdefault(journey_identity_from_case_id(observed_id), set()).add(case_id)
+    completed = sorted(identity for identity, case_ids in planned.items() if observed.get(identity, set()) >= case_ids)
+    attempted = sorted(identity for identity in observed if identity in planned)
+    incomplete = sorted(identity for identity in planned if identity not in completed)
+    return {
+        "planned": len(planned),
+        "attempted": len(attempted),
+        "completed": len(completed),
+        "incomplete": incomplete,
+        "case_denominator": len(expected_ids),
+    }
 
 
 def evaluation_summary(
@@ -581,16 +778,25 @@ def evaluation_summary(
     failures: int,
     cleanup_failures: int,
     fatal: bool,
+    expected_case_ids: list[str] | None = None,
+    harness_failures: int = 0,
 ) -> dict[str, Any]:
     completed = len(evidence)
     passed_cases = sum(item.get("passed") is True for item in evidence)
     failed_cases = completed - passed_cases
+    case_ids_ok = True
+    case_id_detail = "not_checked"
+    if expected_case_ids is not None:
+        case_ids_ok, case_id_detail = validate_case_ids(evidence, expected_case_ids)
+    journeys = journey_denominators(expected_case_ids or [], evidence)
+    quality_passed = failed_cases == 0 and failures == 0
+    harness_passed = not fatal and harness_failures == 0 and case_ids_ok and completed == expected_case_count
+    cleanup_passed = cleanup_failures == 0
     passed = (
         not fatal
-        and failures == 0
-        and cleanup_failures == 0
-        and completed == expected_case_count
-        and failed_cases == 0
+        and quality_passed
+        and cleanup_passed
+        and harness_passed
     )
     status = "fatal" if fatal else ("passed" if passed else "failed")
     return {
@@ -598,11 +804,20 @@ def evaluation_summary(
         "passed": passed,
         "fatal": fatal,
         "failure_count": failures,
+        "quality_failure_count": failures,
+        "harness_failure_count": harness_failures + (0 if case_ids_ok else 1),
         "cleanup_failure_count": cleanup_failures,
         "expected_case_count": expected_case_count,
         "completed_case_count": completed,
         "passed_case_count": passed_cases,
         "failed_case_count": failed_cases,
+        "quality_status": "passed" if quality_passed else "failed",
+        "harness_status": "passed" if harness_passed else "failed",
+        "cleanup_status": "passed" if cleanup_passed else "failed",
+        "case_ids_valid": case_ids_ok,
+        "case_id_detail": case_id_detail,
+        "journeys": journeys,
+        "semantic_review_status": "unreviewed",
     }
 
 
@@ -615,6 +830,8 @@ def persist_evaluation_evidence(
     failures: int,
     cleanup_failures: int,
     fatal: bool,
+    expected_case_ids: list[str] | None = None,
+    harness_failures: int = 0,
 ) -> tuple[dict[str, Any], int, Exception | None]:
     summary = evaluation_summary(
         expected_case_count=expected_case_count,
@@ -622,13 +839,15 @@ def persist_evaluation_evidence(
         failures=failures,
         cleanup_failures=cleanup_failures,
         fatal=fatal,
+        expected_case_ids=expected_case_ids,
+        harness_failures=harness_failures,
     )
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(
                 {
-                    "schema": "issue-539-model-eval-evidence-v2",
+                    "schema": "curated-resource-contact-evidence-v3",
                     **payload,
                     **summary,
                     "cases": evidence,
@@ -648,6 +867,8 @@ def persist_evaluation_evidence(
             failures=failures,
             cleanup_failures=cleanup_failures,
             fatal=fatal,
+            expected_case_ids=expected_case_ids,
+            harness_failures=harness_failures,
         )
         return summary, cleanup_failures, exc
 
@@ -672,14 +893,28 @@ def audit_contains_fine_timing(value: Any) -> bool:
 def run_turn(base: str, token: str, payload: dict[str, Any], stream: bool, timeout: float) -> tuple[str, Any, str | None]:
     started = time.perf_counter()
     response = req(base, token, "POST", "/llm/chat/stream" if stream else "/llm/chat", payload, timeout)
-    if response.status_code != 200: raise RuntimeError(f"chat returned {response.status_code}: {response.text[:400]}")
+    if response.status_code != 200:
+        raise RuntimeError(f"chat returned HTTP {response.status_code}")
     if not stream:
-        body = response.json(); trace = dict(body.get("trace") or body); trace["_evaluation_elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1); return answer_json(body), trace, body.get("session_id")
+        body = response.json()
+        trace = dict(body.get("trace") or body)
+        observed_model = body.get("model") or trace.get("model")
+        if isinstance(observed_model, str) and observed_model:
+            trace["_evaluation_model"] = observed_model
+        trace["_evaluation_elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+        return answer_json(body), trace, body.get("session_id")
     response.encoding = "utf-8"
     events = parse_sse(response.text)
     answer = "".join(str(e["data"].get("delta") or "") for e in events if e["event"] == "answer_delta").strip()
     trace = next((e["data"].get("trace", {}) for e in events if e["event"] == "trace_final"), {})
-    trace = dict(trace); trace["_evaluation_elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    trace = dict(trace)
+    observed_model = trace.get("model") or next(
+        (e["data"].get("model") for e in events if isinstance(e.get("data"), dict) and isinstance(e["data"].get("model"), str)),
+        None,
+    )
+    if isinstance(observed_model, str) and observed_model:
+        trace["_evaluation_model"] = observed_model
+    trace["_evaluation_elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
     sid = next((e["data"].get("session_id") for e in events if e["data"].get("session_id")), None)
     return answer, trace, sid
 
@@ -712,7 +947,8 @@ def resource(
         body["resource_id"] = rid
     path = "/admin/resources" if method == "POST" else f"/admin/resources/{rid}"
     r = req(base, token, method, path, body)
-    if r.status_code not in ({200, 201} if method == "POST" else {200}): raise RuntimeError(f"resource {method}: {r.status_code} {r.text[:400]}")
+    if r.status_code not in ({200, 201} if method == "POST" else {200}):
+        raise RuntimeError(f"resource {method} returned HTTP {r.status_code}")
 
 
 def configure_persona_tools(
@@ -737,9 +973,7 @@ def configure_persona_tools(
                 timeout=30,
             )
             if original.status_code != 200:
-                raise RuntimeError(
-                    f"read global tools: {original.status_code} {original.text[:300]}"
-                )
+                raise RuntimeError(f"read global tools returned HTTP {original.status_code}")
             original_value = original.json().get("value")
             if not isinstance(original_value, str):
                 raise RuntimeError("global Tool default did not return a string value")
@@ -761,7 +995,7 @@ def configure_persona_tools(
         timeout=30,
     )
     if response.status_code != 200:
-        raise RuntimeError(f"configure {label}: {response.status_code} {response.text[:300]}")
+        raise RuntimeError(f"configure {label} returned HTTP {response.status_code}")
 
 
 def cleanup_persona_tools(base: str, admin_token: str, user_type_id: int) -> bool:
@@ -823,12 +1057,25 @@ def persona_tools_effective(base: str, user_token: str, user_type_id: int | None
 
 
 def cleanup_session(base: str, token: str, session_id: str) -> bool:
-    response = req(base, token, "DELETE", f"/query/session/{session_id}", timeout=30)
-    try:
-        body = response.json()
-    except ValueError:
-        body = {}
-    return session_cleanup_ok(response.status_code, body)
+    """Delete a session, tolerating the reverse proxy's short rate window."""
+    for attempt in range(4):
+        response = req(base, token, "DELETE", f"/query/session/{session_id}", timeout=30)
+        try:
+            body = response.json()
+        except (AttributeError, ValueError):
+            body = {}
+        if session_cleanup_ok(response.status_code, body):
+            return True
+        if response.status_code != 429 or attempt == 3:
+            return False
+        retry_after = None
+        headers = getattr(response, "headers", {})
+        try:
+            retry_after = float(headers.get("Retry-After"))
+        except (AttributeError, TypeError, ValueError):
+            pass
+        time.sleep(min(max(retry_after if retry_after is not None else 0.5 * (attempt + 1), 0.25), 5.0))
+    return False
 
 
 def session_cleanup_ok(status_code: int, body: Any) -> bool:
@@ -1012,16 +1259,17 @@ def cleanup_admin(
     )
 
 
-def initial_all_contacts_message(language: str) -> str:
-    if language == "es":
-        return (
-            f"{ORG_NAME} está en México y ofrece ayuda legal. "
-            "Dame su email, teléfono, sitio web, dirección y canal seguro. Responde en español."
-        )
-    return (
-        f"{ORG_NAME} is in Mexico and provides legal help. "
-        "Give me its email, phone, website, address, and secure channel. Answer in English."
+def restore_replaced_admins(fixtures: dict[str, Any], *, backend_runner=backend_python) -> bool:
+    markers = fixtures.get("replaced_admin_pubkeys", [])
+    if not markers:
+        return True
+    rows = backend_runner(
+        f"import database, json; markers = {markers!r}; restored = []; "
+        "[restored.append(database.add_admin(marker)) for marker in markers if database.get_admin_by_pubkey(marker) is None]; "
+        "print(json.dumps({'restored': len(restored), 'remaining': sum(database.get_admin_by_pubkey(marker) is None for marker in markers)}))"
     )
+    result = json.loads(rows[-1]) if rows else {}
+    return result.get("remaining") == 0
 
 
 def exit_code_for_summary(summary: dict[str, Any]) -> int:
@@ -1030,49 +1278,141 @@ def exit_code_for_summary(summary: dict[str, Any]) -> int:
     return 0 if summary.get("passed") is True else 1
 
 
-def validate_loopback_api_base(value: str) -> str:
-    parsed = urlsplit(value)
-    if parsed.scheme.casefold() not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("--api-base must be an HTTP(S) loopback origin")
-    if parsed.username is not None or parsed.password is not None:
-        raise ValueError("--api-base must not contain credentials")
-    if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
-        raise ValueError("--api-base is restricted to localhost, 127.0.0.1, or [::1]")
-    try:
-        parsed.port
-    except ValueError as exc:
-        raise ValueError(f"invalid --api-base port: {exc}") from exc
-    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-        raise ValueError("--api-base must be an origin without a path, query, or fragment")
-    return f"{parsed.scheme.casefold()}://{parsed.netloc}".rstrip("/")
+def runtime_identity_snapshot(
+    observed_models: list[str] | None = None, *, probe_runtime: bool = False
+) -> dict[str, Any]:
+    """Capture non-secret model/config identity for auditability."""
+    configured_model = next(
+        (os.environ.get(name) for name in ("TINFOIL_MODEL", "LLM_MODEL") if os.environ.get(name)),
+        None,
+    )
+    provider = next(
+        (os.environ.get(name) for name in ("LLM_PROVIDER", "TINFOIL_PROVIDER") if os.environ.get(name)),
+        None,
+    )
+    source = "environment" if configured_model or provider else "unavailable"
+    if probe_runtime and configured_model is None:
+        try:
+            process = subprocess.run(
+                [*COMPOSE, "exec", "-T", "sage", "sh", "-c", "printf '%s\\n' \"$TINFOIL_MODEL\" \"$TINFOIL_REASONING_EFFORT\""],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if process.returncode == 0:
+                values = [line.strip() for line in process.stdout.splitlines()]
+                if values and values[0]:
+                    configured_model = values[0]
+                    source = "compose_runtime"
+                if len(values) > 1 and values[1]:
+                    reasoning_effort = values[1]
+                else:
+                    reasoning_effort = None
+            else:
+                reasoning_effort = None
+        except (OSError, subprocess.SubprocessError):
+            reasoning_effort = None
+    else:
+        reasoning_effort = os.environ.get("TINFOIL_REASONING_EFFORT")
+    models = sorted({model for model in (observed_models or []) if isinstance(model, str) and model})
+    identity = {
+        "configured_model": configured_model,
+        "provider": provider,
+        "reasoning_effort": reasoning_effort,
+        "observed_models": models,
+        "source": source,
+    }
+    identity["fingerprint"] = hashlib.sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return identity
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(); ap.add_argument("--api-base", default="http://localhost:18000"); ap.add_argument("--timeout", type=float, default=180); ap.add_argument("--persona", choices=[persona.key for persona in PERSONAS]); ap.add_argument("--language", choices=REPLAY_LANGUAGES); mode = ap.add_mutually_exclusive_group(); mode.add_argument("--inventory-only", action="store_true"); mode.add_argument("--contact-only", action="store_true"); ap.add_argument("--evidence-file", type=Path, default=Path("/tmp/issue539-model-eval-evidence.json")); args = ap.parse_args()
+def runtime_identity_validation(
+    start: dict[str, Any], observed_models: list[str], end: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    observed = sorted({model for model in observed_models if isinstance(model, str) and model})
+    configured = start.get("configured_model") if isinstance(start, dict) else None
+    configured_end = end.get("configured_model") if isinstance(end, dict) else configured
+    if configured and configured_end and configured != configured_end:
+        status = "changed"
+    elif len(observed) == 0:
+        status = "unobserved"
+    elif len(observed) > 1:
+        status = "mixed"
+    elif configured and observed[0] != configured:
+        status = "mismatch"
+    elif not configured:
+        status = "unverified"
+    else:
+        status = "consistent"
+    return {
+        "status": status,
+        "harness_ok": status == "consistent",
+        "configured_model": configured,
+        "configured_model_end": configured_end,
+        "observed_models": observed,
+    }
+
+
+def main(*, preflight=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--api-base", default="http://localhost:18000")
+    ap.add_argument("--timeout", type=float, default=180)
+    ap.add_argument("--persona", choices=[persona.key for persona in PERSONAS])
+    ap.add_argument("--language", choices=REPLAY_LANGUAGES)
+    ap.add_argument("--modality", choices=CONTACT_MODALITIES)
+    ap.add_argument("--journey", choices=("changed", "unchanged"))
+    ap.add_argument("--profile", choices=("smoke", "full"), default="smoke")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--inventory-only", action="store_true")
+    mode.add_argument("--contact-only", action="store_true")
+    ap.add_argument("--evidence-file", type=Path, default=Path("/tmp/issue539-model-eval-evidence.json"))
+    args = ap.parse_args()
     try:
         args.api_base = validate_loopback_api_base(args.api_base)
     except ValueError as exc:
         ap.error(str(exc))
-    stale = {"email": "stale-539@example.test", "phone": "+52-555-0100", "url": "https://stale-539.example.test", "address": "Stale issue 539 office, Mexico", "secure_channel": "stale-secure-539"}
-    fresh = {"email": "fresh-539@example.test", "phone": "+52-555-0199", "url": "https://fresh-539.example.test", "address": "Fresh issue 539 office, Mexico", "secure_channel": "fresh-secure-539"}
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        ap.error("--timeout must be a finite positive number")
     sessions: list[tuple[str, str]] = []
     suffix = str(int(time.time() * 1000))
     rid = f"issue-539-contact-{suffix}"
     inventory_ids = [f"issue-539-inventory-{index}-{suffix}" for index in range(len(INVENTORY_NAMES))]
     fixtures = new_fixture_journal(suffix)
-    fixtures["resource_ids"] = [rid, *([] if args.contact_only else inventory_ids)]
-    expected_cases = expected_case_count(
+    fixtures["resource_ids"] = []
+    baseline, updated = fixture_contacts(suffix)
+    manifest = fixture_manifest(baseline, updated)
+    expected_ids = expected_case_ids(
         args.persona,
-        args.inventory_only,
-        args.contact_only,
+        inventory_only=args.inventory_only,
+        contact_only=args.contact_only,
         language_filter=args.language,
+        modality_filter=args.modality,
+        journey_filter=args.journey,
+        profile=args.profile,
     )
-    failures = 0
+    expected_cases = len(expected_ids)
+    quality_failures = 0
+    harness_failures = 0
     cleanup_failures = 0
     fatal = False
     fatal_error_type: str | None = None
     evidence: list[dict[str, Any]] = []
+    runtime_start = runtime_identity_snapshot(probe_runtime=True)
+    synthetic_preflight: dict[str, Any] = {}
     try:
+        synthetic_preflight = preflight() if preflight is not None else verify_empty_synthetic_environment(_ComposeBackendRunner())
+        if not isinstance(synthetic_preflight, dict) or not is_empty_synthetic_environment(synthetic_preflight):
+            raise RuntimeError(
+                f"synthetic benchmark preflight rejected this instance: {synthetic_preflight.get('unknown_counts') if isinstance(synthetic_preflight, dict) else 'invalid result'}"
+            )
+        # Injected preflight hooks are used by unit tests. Live CLI runs also
+        # bind the HTTP origin to the same backend before minting fixtures.
+        if preflight is None and not verify_http_target(_ComposeBackendRunner(), args.api_base):
+            raise RuntimeError("HTTP target does not match the preflight backend")
         mint(fixtures)
         for persona in fixtures["users"]:
             user_type_id = persona.get("user_type_id")
@@ -1091,140 +1431,100 @@ def main() -> int:
                 str(persona["token"]),
                 None if user_type_id is None else int(user_type_id),
             )
-            failures += 0 if expect(f"{persona['key']}: effective Curated Resources enabled", effective) else 1
-        resource(args.api_base, fixtures["admin"], rid, stale)
-        if not args.contact_only:
-            for index, inventory_id in enumerate(inventory_ids):
-                resource(
-                    args.api_base,
-                    fixtures["admin"],
-                    inventory_id,
-                    {"email": f"inventory-{index}@example.test"},
-                    name=INVENTORY_NAMES[index],
-                    display_order=index,
-                )
+            harness_failures += 0 if expect(f"{persona['key']}: effective Curated Resources enabled", effective) else 1
 
         replay_users = [
             persona
             for persona in fixtures["users"]
             if args.persona is None or persona["key"] == args.persona
         ]
-        for persona_index, persona in enumerate(replay_users):
-            key = str(persona["key"])
-            token = str(persona["token"])
-            if not args.inventory_only:
-                replay_languages = [
-                    language
-                    for language in REPLAY_LANGUAGES
-                    if args.language is None or language == args.language
-                ]
-                for language_index, language in enumerate(replay_languages):
-                    resource(args.api_base, fixtures["admin"], rid, stale, "PUT")
-                    sid = str(uuid.uuid4())
-                    sessions.append((token, sid))
-                    first, first_trace, returned_sid = run_turn(
-                        args.api_base,
-                        token,
-                        {"message": initial_all_contacts_message(language), "tools": ["curated-resources"], "session_id": sid},
-                        bool((persona_index + language_index) % 2),
-                        args.timeout,
-                    )
-                    if returned_sid != sid:
-                        raise RuntimeError(f"initial session id mismatch: expected {sid}, got {returned_sid}")
-                    initial_ok = all(value in first for value in stale.values())
-                    failures += 0 if expect(f"{key}/{language}: stale contact authority", initial_ok, first[:400]) else 1
-                    evidence.append(
-                        evidence_entry(
-                            persona=key,
-                            case=f"{language}_stale_contact_authority",
-                            answer=first,
-                            trace=first_trace,
-                            passed=initial_ok,
-                            detail="all_stale_contacts_present=" + str(initial_ok),
-                        )
-                    )
-                    resource(args.api_base, fixtures["admin"], rid, fresh, "PUT")
-                    for contact_index, (contact_key, followup) in enumerate(CONTACT_REPLAY_CASES[language]):
-                        answer, trace, followup_sid = run_turn(
-                            args.api_base,
-                            token,
-                            {"message": followup, "tools": ["curated-resources"], "session_id": sid},
-                            bool((persona_index + language_index + contact_index) % 2),
-                            args.timeout,
-                        )
-                        if followup_sid != sid:
-                            raise RuntimeError(f"follow-up session id mismatch: expected {sid}, got {followup_sid}")
-                        ok, detail = score_contact_turn(answer, trace, fresh[contact_key], stale)
-                        failures += 0 if expect(f"{key}/{language}: fresh {contact_key}", ok, f"{detail}; answer={answer[:300]}") else 1
-                        evidence.append(
-                            evidence_entry(
-                                persona=key,
-                                case=f"{language}_fresh_{contact_key}",
-                                answer=answer,
-                                trace=trace,
-                                passed=ok,
-                                detail=detail,
-                            )
-                        )
-
-            if args.contact_only:
+        selected_personas = [
+            p for p in replay_users
+            if args.profile != "smoke" or args.persona is not None or p["key"] == "generic_user"
+        ]
+        selected_languages = [l for l in REPLAY_LANGUAGES if args.language is None or l == args.language]
+        selected_modalities = [m for m in CONTACT_MODALITIES if args.modality is None or m == args.modality]
+        selected_journeys = [j for j in ("changed", "unchanged") if args.journey is None or j == args.journey]
+        if args.profile == "smoke":
+            selected_languages = [args.language or "en"]
+            selected_modalities = [args.modality or "email"]
+            selected_journeys = [args.journey] if args.journey else ["changed", "unchanged"]
+        if not args.inventory_only and selected_personas:
+            fixtures["resource_ids"].append(rid)
+            resource(args.api_base, fixtures["admin"], rid, baseline)
+        for persona_index, persona in enumerate(selected_personas):
+            key = str(persona["key"]); token = str(persona["token"])
+            if args.inventory_only:
                 continue
+            for language_index, language in enumerate(selected_languages):
+                for journey in selected_journeys:
+                    for contact_index, modality in enumerate(selected_modalities):
+                        source_before, source_after = (baseline, updated) if journey == "changed" else (updated, updated)
+                        resource(args.api_base, fixtures["admin"], rid, source_before, "PUT")
+                        sid = str(uuid.uuid4()); sessions.append((token, sid))
+                        first_prompt = contact_prompt(language, modality, turn=1)
+                        first, first_trace, returned_sid = run_turn(args.api_base, token, {"message": first_prompt, "tools": ["curated-resources"], "session_id": sid}, bool((persona_index + language_index + contact_index) % 2), args.timeout)
+                        if returned_sid != sid:
+                            harness_failures += 1
+                            raise RuntimeError(f"initial session id mismatch: expected {sid}, got {returned_sid}")
+                        first_dimensions = score_contact_dimensions(first, first_trace, expected=source_before[modality], old_contacts=source_after if journey == "changed" else baseline, lookup_required=True, modality=modality)
+                        first_ok = bool(first_dimensions["quality_passed"])
+                        base_id = journey_case_id(key, language, journey, modality, 1)
+                        case_id = base_id
+                        journey_identity = f"contact::{key}::{language}::{journey}::{modality}"
+                        quality_failures += 0 if first_ok else 1
+                        evidence.append(evidence_entry(persona=key, case=f"{journey}_{modality}_turn1", case_id=case_id, journey_id=journey_identity, turn_index=1, answer=first, trace=first_trace, passed=first_ok, dimensions=first_dimensions, prompt=first_prompt, context={"journey": journey, "turn": 1, "modality": modality, "source_before": "baseline" if journey == "changed" else "updated", "source_after": "baseline" if journey == "changed" else "updated", "between_turn_mutation": {"applied": False}}, detail=json.dumps(first_dimensions, ensure_ascii=False, sort_keys=True)))
+                        if journey == "changed":
+                            resource(args.api_base, fixtures["admin"], rid, source_after, "PUT")
+                        second_prompt = contact_prompt(language, modality, turn=2)
+                        second, second_trace, followup_sid = run_turn(args.api_base, token, {"message": second_prompt, "tools": ["curated-resources"], "session_id": sid}, bool((persona_index + language_index + contact_index + 1) % 2), args.timeout)
+                        if followup_sid != sid:
+                            harness_failures += 1
+                            raise RuntimeError(f"follow-up session id mismatch: expected {sid}, got {followup_sid}")
+                        second_dimensions = score_contact_dimensions(second, second_trace, expected=source_after[modality], old_contacts=baseline, lookup_required=journey == "changed", modality=modality)
+                        second_ok = bool(second_dimensions["quality_passed"])
+                        base_id = journey_case_id(key, language, journey, modality, 2)
+                        case_id = base_id
+                        quality_failures += 0 if second_ok else 1
+                        evidence.append(evidence_entry(persona=key, case=f"{journey}_{modality}_turn2", case_id=case_id, journey_id=journey_identity, turn_index=2, answer=second, trace=second_trace, passed=second_ok, dimensions=second_dimensions, prompt=second_prompt, context={"journey": journey, "turn": 2, "modality": modality, "initial_prompt": first_prompt, "initial_answer": first, "source_before": "baseline" if journey == "changed" else "updated", "source_after": "updated", "between_turn_mutation": {"applied": journey == "changed", "from": "baseline" if journey == "changed" else "updated", "to": "updated"}}, detail=json.dumps(second_dimensions, ensure_ascii=False, sort_keys=True)))
 
-            inventory_sid = str(uuid.uuid4())
-            sessions.append((token, inventory_sid))
+        if not args.contact_only and selected_personas:
+            # Remove the contact record before inventory so broad backend totals
+            # cannot accidentally include the contact fixture.
+            if not args.inventory_only and not cleanup_resource(args.api_base, fixtures["admin"], rid):
+                harness_failures += 1
+                raise RuntimeError("contact fixture could not be isolated before inventory phase")
+            if not args.inventory_only:
+                fixtures["resource_ids"].remove(rid)
+            for index, inventory_id in enumerate(inventory_ids):
+                fixtures["resource_ids"].append(inventory_id)
+                resource(args.api_base, fixtures["admin"], inventory_id, {"email": f"directory-{index}@example.test"}, name=INVENTORY_NAMES[index], display_order=index)
             inventory_language = args.language or "en"
-            inventory_prompt = (
-                "Lista los recursos curados listos cuyos nombres empiezan con 'Issue 539 Inventory'. "
-                "Esta es una solicitud de inventario: no filtres por tipo de ayuda y no supongas que la primera página limitada está completa. Responde en español."
-                if inventory_language == "es"
-                else "List the ready Curated Resources whose names start with 'Issue 539 Inventory'. This is an inventory request: do not filter by help type and do not assume the first bounded page is complete."
-            )
-            first_page, first_trace, inventory_returned_sid = run_turn(
-                args.api_base,
-                token,
-                {"message": inventory_prompt, "tools": ["curated-resources"], "session_id": inventory_sid},
-                bool(persona_index % 2),
-                args.timeout,
-            )
-            if inventory_returned_sid != inventory_sid:
-                raise RuntimeError(f"inventory session id mismatch: expected {inventory_sid}, got {inventory_returned_sid}")
-            ok, detail = score_inventory_turn(first_page, first_trace, final_name=INVENTORY_NAMES[-1], continuation=False)
-            failures += 0 if expect(f"{key}: bounded inventory", ok, f"{detail}; answer={first_page[:500]}") else 1
-            evidence.append(
-                evidence_entry(
-                    persona=key,
-                    case="bounded_inventory",
-                    answer=first_page,
-                    trace=first_trace,
-                    passed=ok,
-                    detail=detail,
+            for persona_index, persona in enumerate(selected_personas):
+                key = str(persona["key"]); token = str(persona["token"]); inventory_sid = str(uuid.uuid4()); sessions.append((token, inventory_sid))
+                inventory_prompt = (
+                    "Lista los recursos curados cuyos nombres empiezan con 'Directory Sample'. No supongas que la primera página está completa. Responde en español."
+                    if inventory_language == "es"
+                    else "List the Curated Resources whose names start with 'Directory Sample'. Do not assume the first bounded page is complete."
                 )
-            )
-            continuation_prompt = "Muestra la siguiente página de esos recursos coincidentes." if inventory_language == "es" else "Show the next page of those matching resources."
-            next_page, next_trace, continuation_sid = run_turn(
-                args.api_base,
-                token,
-                {"message": continuation_prompt, "tools": ["curated-resources"], "session_id": inventory_sid},
-                not bool(persona_index % 2),
-                args.timeout,
-            )
-            if continuation_sid != inventory_sid:
-                raise RuntimeError(f"continuation session id mismatch: expected {inventory_sid}, got {continuation_sid}")
-            ok, detail = score_inventory_turn(next_page, next_trace, final_name=INVENTORY_NAMES[-1], continuation=True, previous_answer=first_page, previous_trace=first_trace)
-            failures += 0 if expect(f"{key}: inventory continuation", ok, f"{detail}; answer={next_page[:500]}") else 1
-            evidence.append(
-                evidence_entry(
-                    persona=key,
-                    case="inventory_continuation",
-                    answer=next_page,
-                    trace=next_trace,
-                    passed=ok,
-                    detail=detail,
-                )
-            )
+                first_page, first_trace, inventory_returned_sid = run_turn(args.api_base, token, {"message": inventory_prompt, "tools": ["curated-resources"], "session_id": inventory_sid}, bool(persona_index % 2), args.timeout)
+                if inventory_returned_sid != inventory_sid:
+                    harness_failures += 1; raise RuntimeError(f"inventory session id mismatch: expected {inventory_sid}, got {inventory_returned_sid}")
+                ok, detail = score_inventory_turn(first_page, first_trace, final_name=INVENTORY_NAMES[-1], continuation=False)
+                quality_failures += 0 if ok else 1
+                evidence.append(evidence_entry(persona=key, case="inventory_page1", case_id=inventory_case_id(key, inventory_language, "page1"), journey_id=f"inventory::{key}::{inventory_language}", turn_index=1, answer=first_page, trace=first_trace, passed=ok, prompt=inventory_prompt, context={"phase": "inventory_isolated", "contact_fixture_present": False, "page": 1}, detail=detail))
+                continuation_prompt = "Muestra la siguiente página de esos recursos." if inventory_language == "es" else "Show the next page of those resources."
+                next_page, next_trace, continuation_sid = run_turn(args.api_base, token, {"message": continuation_prompt, "tools": ["curated-resources"], "session_id": inventory_sid}, not bool(persona_index % 2), args.timeout)
+                if continuation_sid != inventory_sid:
+                    harness_failures += 1; raise RuntimeError(f"continuation session id mismatch: expected {inventory_sid}, got {continuation_sid}")
+                ok, detail = score_inventory_turn(next_page, next_trace, final_name=INVENTORY_NAMES[-1], continuation=True, previous_answer=first_page, previous_trace=first_trace)
+                quality_failures += 0 if ok else 1
+                evidence.append(evidence_entry(persona=key, case="inventory_page2", case_id=inventory_case_id(key, inventory_language, "page2"), journey_id=f"inventory::{key}::{inventory_language}", turn_index=2, answer=next_page, trace=next_trace, passed=ok, prompt=continuation_prompt, context={"phase": "inventory_isolated", "contact_fixture_present": False, "page": 2, "initial_answer": first_page}, detail=detail))
+            fixtures["resource_ids"].append(rid)
+            resource(args.api_base, fixtures["admin"], rid, updated)
 
-        if not args.inventory_only and (args.persona is None or args.persona == "generic_user"):
-            generic = fixtures["users"][0]
+        if not args.inventory_only and args.profile == "full" and (args.persona is None or args.persona == "generic_user") and args.modality is None and args.journey is None:
+            generic = next(p for p in selected_personas if p["key"] == "generic_user")
             configure_persona_tools(
                 args.api_base,
                 fixtures["admin"],
@@ -1237,33 +1537,30 @@ def main() -> int:
                 str(generic["token"]),
                 None,
             )
-            failures += 0 if expect("disabled tools: effective policy is disabled", disabled_effective) else 1
+            harness_failures += 0 if expect("disabled tools: effective policy is disabled", disabled_effective) else 1
             disabled_sid = str(uuid.uuid4())
             sessions.append((str(generic["token"]), disabled_sid))
-            answer, trace, returned_disabled_sid = run_turn(args.api_base, str(generic["token"]), {"message": "Do not use tools. What is the email address?", "tools": [], "session_id": disabled_sid}, False, args.timeout)
+            prompt = "Do not use tools. For Northbridge Legal Aid, what email address is available?"
+            answer, trace, returned_disabled_sid = run_turn(args.api_base, str(generic["token"]), {"message": prompt, "tools": [], "session_id": disabled_sid}, False, args.timeout)
             if returned_disabled_sid != disabled_sid:
                 raise RuntimeError(f"disabled session id mismatch: expected {disabled_sid}, got {returned_disabled_sid}")
-            ok, detail = score_contact_turn(answer, trace, fresh["email"], stale, False); failures += 0 if expect("disabled tools: no invented contact", ok, detail) else 1
-            evidence.append(
-                evidence_entry(
-                    persona="generic_user",
-                    case="disabled_tools_no_invented_contact",
-                    answer=answer,
-                    trace=trace,
-                    passed=ok,
-                    detail=detail,
-                )
-            )
+            dimensions = score_contact_dimensions(answer, trace, expected=updated["email"], old_contacts=baseline, lookup_required=False, tool_enabled=False, modality="email")
+            ok = bool(dimensions["quality_passed"]); quality_failures += 0 if ok else 1
+            evidence.append(evidence_entry(persona="generic_user", case="disabled_tools_no_invented_contact", case_id="control::generic_user::no_tools::email", journey_id="control::generic_user::no_tools", turn_index=1, answer=answer, trace=trace, passed=ok, dimensions=dimensions, prompt=prompt, context={"tools_enabled": False}, detail=json.dumps(dimensions, ensure_ascii=False, sort_keys=True)))
         audit = req(args.api_base, fixtures["admin"], "GET", "/admin/deployment/audit-log?limit=500", timeout=30)
         if audit.status_code != 200:
-            raise RuntimeError(f"audit lookup returned {audit.status_code}: {audit.text[:300]}")
-        failures += 0 if expect("Audit Log excludes fine Conversation timing", not audit_contains_fine_timing(audit.json())) else 1
+            raise RuntimeError(f"audit lookup returned HTTP {audit.status_code}")
+        harness_failures += 0 if expect("Audit Log excludes fine Conversation timing", not audit_contains_fine_timing(audit.json())) else 1
     except Exception as exc:
-        print(f"[ERROR] {exc}"); fatal = True; fatal_error_type = type(exc).__name__
+        print(f"[ERROR] {exc}"); fatal = True; harness_failures += 1; fatal_error_type = type(exc).__name__
     finally:
         if fixtures.get("admin"):
-            for token, sid in sessions:
+            for index, (token, sid) in enumerate(sessions):
                 try:
+                    # Keep cleanup below the reverse proxy's request window;
+                    # cleanup_session also handles an occasional 429.
+                    if index:
+                        time.sleep(0.15)
                     if not cleanup_session(args.api_base, token, sid):
                         cleanup_failures += 1; print(f"[FAIL] cleanup session {sid}")
                 except Exception as exc:
@@ -1311,6 +1608,27 @@ def main() -> int:
                 cleanup_failures += 1; print("[FAIL] cleanup ephemeral admin verification")
         except Exception as exc:
             cleanup_failures += 1; print(f"[FAIL] cleanup ephemeral admin: {exc}")
+        try:
+            if not restore_replaced_admins(fixtures):
+                cleanup_failures += 1; print("[FAIL] restore replaced admin markers")
+        except Exception as exc:
+            cleanup_failures += 1; print(f"[FAIL] restore replaced admin markers: {exc}")
+        observed_models = [str(item["model"]) for item in evidence if isinstance(item.get("model"), str)]
+        missing_model_count = sum(1 for item in evidence if not isinstance(item.get("model"), str) or not item.get("model"))
+        runtime_end = runtime_identity_snapshot(observed_models, probe_runtime=True)
+        runtime_validation = runtime_identity_validation(runtime_start, observed_models, runtime_end)
+        runtime_validation["missing_model_count"] = missing_model_count
+        runtime_validation["harness_ok"] = runtime_validation["harness_ok"] and missing_model_count == 0
+        if not runtime_validation["harness_ok"]:
+            harness_failures += 1
+        manifest_end = fixture_manifest(baseline, updated)
+        manifest_validation = {
+            "start_hash": manifest.get("hash"),
+            "end_hash": manifest_end.get("hash"),
+            "consistent": manifest_end.get("hash") == manifest.get("hash"),
+        }
+        if not manifest_validation["consistent"]:
+            harness_failures += 1
         summary, cleanup_failures, evidence_error = persist_evaluation_evidence(
             args.evidence_file,
             payload={
@@ -1319,23 +1637,36 @@ def main() -> int:
                 "inventory_only": args.inventory_only,
                 "contact_only": args.contact_only,
                 "language_filter": args.language,
+                "modality_filter": args.modality,
+                "journey_filter": args.journey,
+                "profile": args.profile,
+                "planned_case_ids": expected_ids,
+                "runner_code_hash": RUNNER_CODE_HASH,
+                "scenario_catalog_hash": hashlib.sha256(
+                    json.dumps(expected_ids, separators=(",", ":")).encode("utf-8")
+                ).hexdigest(),
+                "fixture_schema": "neutral-contact-v3",
+                "fixture_manifest": manifest,
+                "fixture_manifest_validation": manifest_validation,
+                "synthetic_preflight": synthetic_preflight,
+                "runtime_identity_start": runtime_start,
+                "runtime_identity_end": runtime_end,
+                "runtime_identity_validation": runtime_validation,
                 "inventory_fixture_count": len(INVENTORY_NAMES),
             },
             expected_case_count=expected_cases,
             evidence=evidence,
-            failures=failures,
+            failures=quality_failures,
             cleanup_failures=cleanup_failures,
             fatal=fatal,
+            expected_case_ids=expected_ids,
+            harness_failures=harness_failures,
         )
         if evidence_error is None:
             print(f"[EVIDENCE] {args.evidence_file}")
         else:
             print(f"[FAIL] write evidence: {evidence_error}")
-    replay_count = 1 if args.persona else len(PERSONAS)
-    selected_languages = [language for language in REPLAY_LANGUAGES if args.language is None or language == args.language]
-    contact_count = 0 if args.inventory_only else sum(len(CONTACT_REPLAY_CASES[language]) for language in selected_languages)
-    inventory_pages = 0 if args.contact_only else 2
-    print(f"[SUMMARY] status={summary['status']} passed={summary['passed']} personas={replay_count} contact_modalities={contact_count} inventory_pages={inventory_pages} expected_cases={summary['expected_case_count']} completed_cases={summary['completed_case_count']} failures={failures} cleanup_failures={cleanup_failures}")
+    print(f"[SUMMARY] status={summary['status']} passed={summary['passed']} profile={args.profile} expected_cases={summary['expected_case_count']} completed_cases={summary['completed_case_count']} quality_failures={quality_failures} harness_failures={harness_failures} cleanup_failures={cleanup_failures}")
     return exit_code_for_summary(summary)
 
 if __name__ == "__main__": raise SystemExit(main())

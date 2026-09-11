@@ -1,21 +1,23 @@
 {
+  "schema_version": "natural-conversation-benchmark-config/v2",
   "backend_url": "http://localhost:18000",
-  "top_k": 8,
-  "enable_web_search": true,
-  "enable_auto_search_followup": true,
-  "grading": {
-    "enabled": true,
-    "model": "gpt-4o",
-    "temperature": 0.1
+  "timeout_seconds": 120,
+  "model": null,
+  "review": {
+    "status": "unreviewed",
+    "grader": null,
+    "policy": "Do not transfer benchmark content to an automatic external grader. Record structured human or agent review separately against full captured turns; agents cannot certify passes."
   },
-  "output_dir": "evals",
-  "design_principles": [
-    "**Brevity** - Short responses (2-3 paragraphs max) for users under duress",
-    "**Plain language** - No jargon; speak like a trusted friend",
-    "**One step at a time** - Give ONE clear next action",
-    "**Never invent organizations** - Say \"search online for human rights help in [country]\"",
-    "**Personal decisions respected** - Present pros/cons, never push",
-    "**Urgency surfaced calmly** - When timing matters, explain why without alarming",
-    "**Clarifying questions** - Ask 1-2 follow-ups when needed"
-  ]
+  "measurement": {
+    "transport": "POST /llm/chat with a fresh requested session id per journey",
+    "explicit_tools": ["knowledge-search", "curated-resources"],
+    "quality": "unreviewed",
+    "completion_requires": [
+      "every turn returns a non-empty answer",
+      "every turn returns the requested session id",
+      "every turn identifies the same model",
+      "session deletion succeeds"
+    ],
+    "semantic_failure_policy": "missing, incomplete, or invalid review is an evaluation error and never a quality pass"
+  }
 }

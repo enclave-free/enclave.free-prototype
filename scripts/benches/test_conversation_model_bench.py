@@ -857,7 +857,7 @@ class ConversationModelBenchTest(unittest.TestCase):
         self.assertIn("does not simulate Model Provider", docs)
         self.assertNotIn("Open Decisions", docs)
 
-    def test_cli_defaults_to_all_v0_scenarios(self) -> None:
+    def test_cli_defaults_include_natural_and_contract_scenarios(self) -> None:
         options = parse_args([])
 
         self.assertEqual(
@@ -873,6 +873,8 @@ class ConversationModelBenchTest(unittest.TestCase):
                 "user_knowledge_and_resource_assistance",
                 "user_consent_boundary",
                 "user_nicaragua_referral_relevance",
+                "user_natural_consent",
+                "user_natural_knowledge",
             ),
         )
 
@@ -1598,7 +1600,7 @@ with database.get_cursor() as cursor:
             client=client,
         )
 
-        self.assertEqual(artifact["schema_version"], 1)
+        self.assertEqual(artifact["schema_version"], 2)
         self.assertEqual(artifact["candidates"][0]["model"], "kimi-k2-6")
         self.assertEqual(
             artifact["candidates"][0]["scenarios"][0]["id"],
@@ -2470,7 +2472,7 @@ with database.get_cursor() as cursor:
         }
         self.assertEqual(
             respectful_checks["answer_respects_survivor_consent"]["status"],
-            "passed",
+            "unreviewed",
         )
     def test_user_response_style_warns_on_verbosity(self) -> None:
         concise = StreamResult(
@@ -2696,7 +2698,7 @@ with database.get_cursor() as cursor:
             [client.last_payload["session_id"], observed_session_id],
         )
 
-    def test_seeded_knowledge_requires_exact_fixture_facts(self) -> None:
+    def test_seeded_knowledge_grounding_requires_semantic_review(self) -> None:
         class UngroundedAnswerClient(FakeConversationClient):
             def stream_chat(self, token: str, payload: dict, timeout: float) -> StreamResult:
                 result = super().stream_chat(token, payload, timeout)
@@ -2720,7 +2722,8 @@ with database.get_cursor() as cursor:
         failures = {
             item["name"] for item in artifact["summary"]["hard_failures"]
         }
-        self.assertIn("answer_uses_exact_seeded_knowledge_facts", failures)
+        self.assertNotIn("answer_uses_exact_seeded_knowledge_facts", failures)
+        self.assertEqual(artifact["measurements"]["semantic_review"]["status"], "unreviewed")
 
     def test_database_answer_requires_exact_fixture_count(self) -> None:
         class WrongCountClient(FakeConversationClient):
