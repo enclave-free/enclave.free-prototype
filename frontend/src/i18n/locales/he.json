@@ -1782,7 +1782,7 @@
       "goToPage": "עבור לעמוד",
       "sageExtra": "הגדר את LLM_API_KEY למפתח ה-Tinfoil שלך מכתובת {{tinfoilSignupUrl}}. ה-stack ממפה אותו ל-Sage ול-Tinfoil proxy המקומי.",
       "sageHint": "פרוטוטייפ זה מנתב תעבורת Agent Runtime דרך Sage ו-Tinfoil. LLM_API_KEY הוא המפתח הקנוני של ספק המודל.",
-      "modelField": "TINFOIL_MODEL — מזהה מודל Tinfoil ש-Sage צריך להשתמש בו (לדוגמה: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — מזהה מודל Tinfoil ש-Sage צריך להשתמש בו (לדוגמה: glm-5-3-flash).",
       "overviewDesc": "פרוטוטייפ זה משתמש ב-Sage כ-Agent Runtime ציבורי וב-Tinfoil כטרנספורט של ספק המודל. הגדר את ספק המודל דרך הגדרות Deployment של LLM_*; ה-stack ממפה אותם ל-Tinfoil runtime של Sage.",
       "overviewTitle": "סקירת Sage Runtime",
       "providerField": "LLM_PROVIDER — יש להגדיר כ-\"sage\" עבור פרוטוטייפ זה."
@@ -2308,7 +2308,7 @@
     "LLM_MODEL": {
       "label": "שם המודל",
       "description": "שם/מזהה מודל",
-      "hint": "מזהה מודל ה-Tinfoil ש-Sage צריך להשתמש בו (למשל, \"glm-5-2\")."
+      "hint": "מזהה מודל ה-Tinfoil ש-Sage צריך להשתמש בו (למשל, \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "נקודת קצה של API",

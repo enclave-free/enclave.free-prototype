@@ -1787,7 +1787,7 @@
       "goToPage": "Перейти на сторінку",
       "sageExtra": "Встановіть LLM_API_KEY на ваш ключ Tinfoil із {{tinfoilSignupUrl}}. Стек зіставляє його з Sage та локальним проксі Tinfoil.",
       "sageHint": "Цей прототип спрямовує трафік Agent Runtime через Sage та Tinfoil. LLM_API_KEY є канонічним ключем постачальника моделей.",
-      "modelField": "TINFOIL_MODEL — ідентифікатор моделі Tinfoil, який має використовувати Sage (наприклад: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — ідентифікатор моделі Tinfoil, який має використовувати Sage (наприклад: glm-5-3-flash).",
       "overviewDesc": "Цей прототип використовує Sage як публічний Agent Runtime, а Tinfoil — як транспорт постачальника моделей. Налаштуйте постачальника моделей через параметри розгортання LLM_*; стек зіставляє їх із середовищем виконання Tinfoil у Sage.",
       "overviewTitle": "Огляд середовища виконання Sage",
       "providerField": "LLM_PROVIDER — для цього прототипу встановіть значення \"sage\"."
@@ -2313,7 +2313,7 @@
     "LLM_MODEL": {
       "label": "Назва моделі",
       "description": "Назва/ідентифікатор моделі",
-      "hint": "Ідентифікатор моделі Tinfoil, який має використовувати Sage (наприклад, \"glm-5-2\")."
+      "hint": "Ідентифікатор моделі Tinfoil, який має використовувати Sage (наприклад, \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Кінцева точка API",

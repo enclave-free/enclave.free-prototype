@@ -1779,7 +1779,7 @@
       "goToPage": "Μετάβαση σε σελίδα",
       "sageExtra": "Ορίστε το LLM_API_KEY με το κλειδί Tinfoil σας από το {{tinfoilSignupUrl}}. Το stack το αντιστοιχίζει στο Sage και στο τοπικό proxy Tinfoil.",
       "sageHint": "Αυτό το πρωτότυπο κατευθύνει την κίνηση του Agent Runtime μέσω του Sage και του Tinfoil. Το LLM_API_KEY είναι το επίσημο κλειδί του Model Provider.",
-      "modelField": "TINFOIL_MODEL — αναγνωριστικό μοντέλου Tinfoil που πρέπει να χρησιμοποιήσει το Sage (π.χ.: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — αναγνωριστικό μοντέλου Tinfoil που πρέπει να χρησιμοποιήσει το Sage (π.χ.: glm-5-3-flash).",
       "overviewDesc": "Αυτό το πρωτότυπο χρησιμοποιεί το Sage ως το δημόσιο Agent Runtime και το Tinfoil ως το μέσο μεταφοράς του Model Provider. Ρυθμίστε το Model Provider μέσω των Deployment Settings LLM_*· το stack τα αντιστοιχεί στο runtime Tinfoil του Sage.",
       "overviewTitle": "Επισκόπηση Sage Runtime",
       "providerField": "LLM_PROVIDER — ορίστε ως \"sage\" για αυτό το πρωτότυπο."
@@ -2305,7 +2305,7 @@
     "LLM_MODEL": {
       "label": "Όνομα Μοντέλου",
       "description": "Όνομα/αναγνωριστικό μοντέλου",
-      "hint": "Το αναγνωριστικό μοντέλου Tinfoil που πρέπει να χρησιμοποιήσει το Sage (π.χ. \"glm-5-2\")."
+      "hint": "Το αναγνωριστικό μοντέλου Tinfoil που πρέπει να χρησιμοποιήσει το Sage (π.χ. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Τελικό σημείο API",

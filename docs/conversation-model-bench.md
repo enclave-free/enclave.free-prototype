@@ -173,10 +173,14 @@ Resources, combined Knowledge/Curated, tight-consent, and Nicaragua-referral
 cases. Inspect final answers as well as timings; a faster configuration does not
 win by weakening consent, grounding, Tool selection, or country relevance.
 
+For GLM-5.3 Flash, use the supported `low`, `high`, and `max` thinking budgets.
+The deployment default is `low`; the former GLM-5.2 `none` setting mixed reasoning
+into answer content during migration preflight.
+
 From the repository root, the reproducible Docker flow is:
 
 ```bash
-for effort in none minimal low medium high xhigh max; do
+for effort in low high max; do
   TINFOIL_REASONING_EFFORT="$effort" docker compose \
     -f docker-compose.infra.yml -f docker-compose.app.yml \
     up -d --force-recreate --no-deps sage

@@ -1779,7 +1779,7 @@
       "goToPage": "पेज पर जाएं",
       "sageExtra": "LLM_API_KEY को {{tinfoilSignupUrl}} से अपनी Tinfoil key पर सेट करें। स्टैक इसे Sage और लोकल Tinfoil प्रॉक्सी से मैप करता है।",
       "sageHint": "यह प्रोटोटाइप Agent Runtime ट्रैफ़िक को Sage और Tinfoil के माध्यम से रूट करता है। LLM_API_KEY मानक Model Provider key है।",
-      "modelField": "TINFOIL_MODEL — Tinfoil मॉडल पहचानकर्ता जिसका उपयोग Sage को करना चाहिए (उदाहरण के लिए: glm-5-2)।",
+      "modelField": "TINFOIL_MODEL — Tinfoil मॉडल पहचानकर्ता जिसका उपयोग Sage को करना चाहिए (उदाहरण के लिए: glm-5-3-flash)।",
       "overviewDesc": "यह प्रोटोटाइप सार्वजनिक Agent Runtime के रूप में Sage और Model Provider ट्रांसपोर्ट के रूप में Tinfoil का उपयोग करता है। LLM_* Deployment Settings के माध्यम से Model Provider को कॉन्फ़िगर करें; स्टैक उन्हें Sage के Tinfoil runtime से मैप करता है।",
       "overviewTitle": "Sage Runtime अवलोकन",
       "providerField": "LLM_PROVIDER — इस प्रोटोटाइप के लिए \"sage\" पर सेट करें।"
@@ -2305,7 +2305,7 @@
     "LLM_MODEL": {
       "label": "मॉडल का नाम",
       "description": "मॉडल का नाम/पहचानकर्ता",
-      "hint": "Tinfoil मॉडल पहचानकर्ता जिसका उपयोग Sage को करना चाहिए (जैसे, \"glm-5-2\")।"
+      "hint": "Tinfoil मॉडल पहचानकर्ता जिसका उपयोग Sage को करना चाहिए (जैसे, \"glm-5-3-flash\")।"
     },
     "LLM_API_URL": {
       "label": "API एंडपॉइंट",

@@ -1777,7 +1777,7 @@
       "goToPage": "Buka halaman",
       "sageExtra": "Atur LLM_API_KEY ke kunci Tinfoil Anda dari {{tinfoilSignupUrl}}. Stack akan memetakannya ke Sage dan proxy Tinfoil lokal.",
       "sageHint": "Prototipe ini mengarahkan lalu lintas Agent Runtime melalui Sage dan Tinfoil. LLM_API_KEY adalah kunci Model Provider utama.",
-      "modelField": "TINFOIL_MODEL — pengenal model Tinfoil yang harus digunakan Sage (contoh: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — pengenal model Tinfoil yang harus digunakan Sage (contoh: glm-5-3-flash).",
       "overviewDesc": "Prototipe ini menggunakan Sage sebagai Agent Runtime publik dan Tinfoil sebagai transport Model Provider. Konfigurasikan Model Provider melalui Pengaturan Deployment LLM_*; stack akan memetakannya ke runtime Tinfoil milik Sage.",
       "overviewTitle": "Ikhtisar Runtime Sage",
       "providerField": "LLM_PROVIDER — atur ke \"sage\" untuk prototipe ini."
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "Nama Model",
       "description": "Nama/pengenal model",
-      "hint": "Pengenal model Tinfoil yang harus digunakan Sage (misalnya, \"glm-5-2\")."
+      "hint": "Pengenal model Tinfoil yang harus digunakan Sage (misalnya, \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Endpoint API",

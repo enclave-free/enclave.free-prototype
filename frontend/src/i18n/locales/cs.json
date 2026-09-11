@@ -1789,7 +1789,7 @@
       "goToPage": "Přejít na stránku",
       "sageExtra": "Nastavte LLM_API_KEY na váš Tinfoil klíč z {{tinfoilSignupUrl}}. Stack jej mapuje na Sage a lokální Tinfoil proxy.",
       "sageHint": "Tento prototyp směruje provoz Agent Runtime přes Sage a Tinfoil. LLM_API_KEY je kanonický klíč Model Provider.",
-      "modelField": "TINFOIL_MODEL — identifikátor modelu Tinfoil, který by měl Sage použít (například: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — identifikátor modelu Tinfoil, který by měl Sage použít (například: glm-5-3-flash).",
       "overviewDesc": "Tento prototyp používá Sage jako veřejný Agent Runtime a Tinfoil jako transport pro Model Provider. Model Provider nakonfigurujte prostřednictvím LLM_* Deployment Settings; stack je mapuje na Tinfoil runtime v Sage.",
       "overviewTitle": "Přehled Sage Runtime",
       "providerField": "LLM_PROVIDER — pro tento prototyp nastavte na \"sage\"."
@@ -2315,7 +2315,7 @@
     "LLM_MODEL": {
       "label": "Název modelu",
       "description": "Název/identifikátor modelu",
-      "hint": "Identifikátor modelu Tinfoil, který by měl Sage používat (např. \"glm-5-2\")."
+      "hint": "Identifikátor modelu Tinfoil, který by měl Sage používat (např. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Koncový bod API",

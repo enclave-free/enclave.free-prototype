@@ -88,7 +88,7 @@ class ModelProviderCompatibilityCleanupTest(unittest.TestCase):
 
         provider = SageTinfoilProvider()
 
-        self.assertEqual(provider.default_model, "glm-5-2")
+        self.assertEqual(provider.default_model, "glm-5-3-flash")
         self.assertFalse(hasattr(provider, "fallback_models"))
 
     def test_maple_provider_label_is_not_coerced_to_sage(self) -> None:

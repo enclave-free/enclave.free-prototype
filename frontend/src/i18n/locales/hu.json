@@ -1777,7 +1777,7 @@
       "goToPage": "Oldal megtekintése",
       "sageExtra": "Állítsa az LLM_API_kerüléket a {{tinfoilSignupUrl}} oldalról származó Tinfoil kulcsára. A stack hozzárendeli azt a Sage-hez és a helyi Tinfoil proxyhoz.",
       "sageHint": "Ez a prototípus az Agent Runtime forgalmat a Sage és a Tinfoil keresztül irányítja. Az LLM_API_KEY a hivatalos Model Provider kulcs.",
-      "modelField": "TINFOIL_MODEL — a Tinfoil modell azonosító, amelyet a Sage-nek kell használnia (például: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — a Tinfoil modell azonosító, amelyet a Sage-nek kell használnia (például: glm-5-3-flash).",
       "overviewDesc": "Ez a prototípus a Sage-t használja nyilvános Agent Runtime-ként, a Tinfoil-t pedig a Model Provider transportként. Konfigurálja a Model Providert az LLM_* Deployment Beállításokon keresztül; a stack hozzárendeli őket a Sage Tinfoil futtatási környezetéhez.",
       "overviewTitle": "Sage futtatási áttekintés",
       "providerField": "LLM_PROVIDER — ehhez a prototípushoz állítsa \"sage\" értékre."
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "Modell neve",
       "description": "Modell név/azonosító",
-      "hint": "A Tinfoil modell azonosító, amelyet a Sage-nek használnia kell (pl. \"glm-5-2\")."
+      "hint": "A Tinfoil modell azonosító, amelyet a Sage-nek használnia kell (pl. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "API végpont",

@@ -1803,7 +1803,7 @@
       "goToPage": "اذهب إلى الصفحة",
       "sageExtra": "اضبط LLM_API_KEY على مفتاح Tinfoil الخاص بك من {{tinfoilSignupUrl}}. تقوم الحزمة بربطه بـ Sage ووكيل Tinfoil المحلي.",
       "sageHint": "يوجّه هذا النموذج الأولي حركة مرور وقت تشغيل الوكيل عبر Sage وTinfoil. LLM_API_KEY هو المفتاح المعتمد لموفّر النموذج.",
-      "modelField": "TINFOIL_MODEL — معرّف نموذج Tinfoil الذي ينبغي أن يستخدمه Sage (على سبيل المثال: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — معرّف نموذج Tinfoil الذي ينبغي أن يستخدمه Sage (على سبيل المثال: glm-5-3-flash).",
       "overviewDesc": "يستخدم هذا النموذج الأولي Sage كبيئة تشغيل الوكيل العامة وTinfoil كوسيلة نقل لمزوّد النموذج. اضبط مزوّد النموذج من خلال إعدادات النشر LLM_*؛ تقوم الحزمة بربطها ببيئة تشغيل Tinfoil الخاصة بـSage.",
       "overviewTitle": "نظرة عامة على بيئة تشغيل Sage",
       "providerField": "LLM_PROVIDER — اضبطه على \"sage\" لهذا النموذج الأولي."
@@ -2329,7 +2329,7 @@
     "LLM_MODEL": {
       "label": "اسم النموذج",
       "description": "اسم/معرّف النموذج",
-      "hint": "معرّف نموذج Tinfoil الذي ينبغي أن يستخدمه Sage (مثل \"glm-5-2\")."
+      "hint": "معرّف نموذج Tinfoil الذي ينبغي أن يستخدمه Sage (مثل \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "نقطة نهاية API",

@@ -27,6 +27,7 @@ def request_completion(
     api_key: str,
     model: str,
     timeout: float,
+    reasoning_effort: str = "low",
 ) -> dict[str, Any]:
     request_body = json.dumps(
         {
@@ -38,7 +39,8 @@ def request_completion(
                 }
             ],
             "stream": False,
-            "max_tokens": 64,
+            "max_tokens": 1024,
+            "reasoning_effort": reasoning_effort,
             "temperature": 0,
         }
     ).encode()
@@ -84,6 +86,8 @@ def request_completion(
 
     if not isinstance(payload, dict):
         raise SmokeFailure("completion response must be a JSON object")
+    if payload.get("model") != model:
+        raise SmokeFailure("returned model does not match the requested model")
     choices = payload.get("choices")
     if not isinstance(choices, list) or not choices:
         raise SmokeFailure("completion response is missing choices")
@@ -93,6 +97,9 @@ def request_completion(
     ):
         raise SmokeFailure("completion response is missing the assistant message")
 
+    content = first_choice["message"].get("content")
+    if first_choice.get("finish_reason") != "stop" or not isinstance(content, str) or not content.strip():
+        raise SmokeFailure("model did not finish a non-empty assistant answer")
     return payload
 
 
@@ -109,7 +116,7 @@ def parse_args() -> argparse.Namespace:
         "--model",
         default=os.environ.get("LLM_MODEL")
         or os.environ.get("TINFOIL_MODEL")
-        or "glm-5-2",
+        or "glm-5-3-flash",
         help="Model used for the completion smoke",
     )
     parser.add_argument(
@@ -118,6 +125,7 @@ def parse_args() -> argparse.Namespace:
         default=120,
         help="Request timeout in seconds (default: 120)",
     )
+    parser.add_argument("--reasoning-effort", default=os.environ.get("TINFOIL_REASONING_EFFORT") or "low")
     return parser.parse_args()
 
 
@@ -134,12 +142,13 @@ def main() -> int:
             api_key=api_key,
             model=args.model,
             timeout=args.timeout,
+            reasoning_effort=args.reasoning_effort,
         )
     except SmokeFailure as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
 
-    response_model = payload.get("model", args.model)
+    response_model = payload["model"]
     print(f"[PASS] non-streaming response integrity verified ({response_model})")
     return 0
 

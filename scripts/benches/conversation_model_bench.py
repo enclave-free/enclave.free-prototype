@@ -1898,7 +1898,7 @@ class LocalComposeEnvironment:
 
     def current_model(self) -> str:
         env = self.container_env("sage")
-        return env.get("TINFOIL_MODEL") or "glm-5-2"
+        return env.get("TINFOIL_MODEL") or "glm-5-3-flash"
 
     def verify_runtime_model(self, expected_model: str | None = None) -> dict[str, Any]:
         env = self.container_env("sage")

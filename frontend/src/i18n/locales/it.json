@@ -1742,7 +1742,7 @@
       "goToPage": "Vai alla pagina",
       "sageExtra": "Impostare LLM_API_KEY con la tua chiave Tinfoil da {{tinfoilSignupUrl}}. Lo stack la mappa su Sage e sul proxy locale Tinfoil.",
       "sageHint": "Questo prototipo instrada il traffico dell'Agent Runtime attraverso Sage e Tinfoil. LLM_API_KEY è la chiave canonica del Model Provider.",
-      "modelField": "TINFOIL_MODEL — identificatore del modello Tinfoil che Sage deve utilizzare (ad esempio: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — identificatore del modello Tinfoil che Sage deve utilizzare (ad esempio: glm-5-3-flash).",
       "overviewDesc": "Questo prototipo utilizza Sage come Agent Runtime pubblico e Tinfoil come trasporto del Model Provider. Configurare il Model Provider tramite le impostazioni di Deployment LLM_*; lo stack le mappa sull'ambiente runtime Tinfoil di Sage.",
       "overviewTitle": "Panoramica runtime Sage",
       "providerField": "LLM_PROVIDER — impostare su \"sage\" per questo prototipo."
@@ -2310,7 +2310,7 @@
     "LLM_MODEL": {
       "label": "Nome Modello",
       "description": "Nome/identificativo del modello",
-      "hint": "L'identificativo del modello Tinfoil che Sage deve utilizzare (es. \"glm-5-2\")."
+      "hint": "L'identificativo del modello Tinfoil che Sage deve utilizzare (es. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Endpoint API",

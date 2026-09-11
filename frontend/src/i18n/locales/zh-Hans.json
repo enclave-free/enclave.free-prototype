@@ -1785,7 +1785,7 @@
       "goToPage": "转到页面",
       "sageExtra": "将 LLM_API_KEY 设置为来自 {{tinfoilSignupUrl}} 的 Tinfoil 密钥。技术栈会将其映射到 Sage 和本地 Tinfoil 代理。",
       "sageHint": "此原型通过 Sage 和 Tinfoil 路由 Agent 运行时流量。LLM_API_KEY 是规范的模型提供方密钥。",
-      "modelField": "TINFOIL_MODEL — Sage 应使用的 Tinfoil 模型标识符（例如：glm-5-2）。",
+      "modelField": "TINFOIL_MODEL — Sage 应使用的 Tinfoil 模型标识符（例如：glm-5-3-flash）。",
       "overviewDesc": "此原型使用 Sage 作为公共代理运行时，并使用 Tinfoil 作为模型提供方传输层。通过 LLM_* 部署设置来配置模型提供方；技术栈会将它们映射到 Sage 的 Tinfoil 运行时。",
       "overviewTitle": "Sage 运行时概览",
       "providerField": "LLM_PROVIDER — 在此原型中设置为 \"sage\"。"
@@ -2311,7 +2311,7 @@
     "LLM_MODEL": {
       "label": "模型名称",
       "description": "模型名称/标识符",
-      "hint": "Sage 应使用的 Tinfoil 模型标识符（例如 \"glm-5-2\"）。"
+      "hint": "Sage 应使用的 Tinfoil 模型标识符（例如 \"glm-5-3-flash\"）。"
     },
     "LLM_API_URL": {
       "label": "API 端点",

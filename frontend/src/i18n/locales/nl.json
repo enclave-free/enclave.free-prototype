@@ -1777,7 +1777,7 @@
       "goToPage": "Ga naar pagina",
       "sageExtra": "Stel LLM_API_KEY in op je Tinfoil-sleutel van {{tinfoilSignupUrl}}. De stack koppelt deze aan Sage en de lokale Tinfoil proxy.",
       "sageHint": "Deze prototype routeert Agent Runtime-verkeer via Sage en Tinfoil. LLM_API_KEY is de standaard Model Provider-sleutel.",
-      "modelField": "TINFOIL_MODEL — de Tinfoil model-identifier die Sage moet gebruiken (bijvoorbeeld: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — de Tinfoil model-identifier die Sage moet gebruiken (bijvoorbeeld: glm-5-3-flash).",
       "overviewDesc": "Deze prototype gebruikt Sage als de publieke Agent Runtime en Tinfoil als de Model Provider transport. Configureer de Model Provider via de LLM_* Deployment Settings; de stack koppelt deze aan de Tinfoil runtime van Sage.",
       "overviewTitle": "Overzicht Sage Runtime",
       "providerField": "LLM_PROVIDER — instellen op \"sage\" voor deze prototype."
@@ -2292,7 +2292,7 @@
     "LLM_MODEL": {
       "label": "Modelnaam",
       "description": "Modelnaam/identificatie",
-      "hint": "De Tinfoil-modelidentificatie die Sage moet gebruiken (bijv. \"glm-5-2\")."
+      "hint": "De Tinfoil-modelidentificatie die Sage moet gebruiken (bijv. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "API-endpoint",

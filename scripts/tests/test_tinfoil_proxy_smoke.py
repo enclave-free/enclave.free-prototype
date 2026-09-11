@@ -72,7 +72,7 @@ def run_integrity_smoke(api_base: str) -> subprocess.CompletedProcess[str]:
             "smoke-model",
         ],
         cwd=REPO_ROOT,
-        env={**os.environ, "LLM_API_KEY": "smoke-placeholder"},
+        env={**os.environ, "LLM_API_KEY": "smoke-placeholder", "TINFOIL_REASONING_EFFORT": "low"},
         capture_output=True,
         text=True,
         timeout=5,
@@ -167,7 +167,19 @@ class TinfoilResponseIntegritySmokeTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("non-streaming response integrity verified", result.stdout)
+        self.assertEqual(requests[0]["reasoning_effort"], "low")
         self.assertEqual(requests[0]["stream"], False)
+
+    def test_wrong_model_or_unfinished_answer_cannot_pass(self) -> None:
+        for model, finish, content in (("glm-5-2", "stop", "ok"), (None, "stop", "ok"),
+                                       ("smoke-model", "length", "partial"), ("smoke-model", "stop", "")):
+            with self.subTest(model=model, finish=finish, content=content):
+                body = json.dumps({"model": model, "choices": [{"finish_reason": finish,
+                    "message": {"role": "assistant", "content": content}}]}).encode()
+                with completion_server(body, declared_length=len(body)) as (api_base, _):
+                    result = run_integrity_smoke(api_base)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertNotIn("[PASS]", result.stdout)
 
     def test_truncated_non_streaming_response_fails(self) -> None:
         body = json.dumps(

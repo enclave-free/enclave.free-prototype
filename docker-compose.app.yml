@@ -19,7 +19,7 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-sage}
       - LLM_API_URL=${LLM_API_URL:-http://tinfoil-proxy:8089/v1}
       - LLM_API_KEY=${LLM_API_KEY:?LLM_API_KEY is required}
-      - LLM_MODEL=${TINFOIL_MODEL:-glm-5-2}
+      - LLM_MODEL=${TINFOIL_MODEL:-glm-5-3-flash}
       - SAGE_WEB_URL=http://sage:3000
       - SEARXNG_URL=${SEARXNG_URL:-http://searxng:8080}
       - SQLITE_PATH=/data/enclave.db
@@ -83,8 +83,8 @@ services:
       - ENCLAVE_ENV=${ENCLAVE_ENV:-development}
       - TINFOIL_API_URL=${TINFOIL_API_URL:-http://tinfoil-proxy:8089/v1}
       - TINFOIL_API_KEY=${LLM_API_KEY:?LLM_API_KEY is required}
-      - TINFOIL_MODEL=${TINFOIL_MODEL:-glm-5-2}
-      - TINFOIL_REASONING_EFFORT=${TINFOIL_REASONING_EFFORT:-none}
+      - TINFOIL_MODEL=${TINFOIL_MODEL:-glm-5-3-flash}
+      - TINFOIL_REASONING_EFFORT=${TINFOIL_REASONING_EFFORT:-low}
       - TINFOIL_EMBEDDING_MODEL=${TINFOIL_EMBEDDING_MODEL:-nomic-embed-text}
       - SAGE_WORKSPACE=/workspace
       - ENCLAVE_WEB_PORT=3000

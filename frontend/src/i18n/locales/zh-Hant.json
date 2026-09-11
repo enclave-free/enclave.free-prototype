@@ -1778,7 +1778,7 @@
       "goToPage": "前往頁面",
       "sageExtra": "將 LLM_API_KEY 設定為來自 {{tinfoilSignupUrl}} 的 Tinfoil 金鑰。系統堆疊會將其映射至 Sage 與本地 Tinfoil 代理。",
       "sageHint": "此原型透過 Sage 與 Tinfoil 路由 Agent Runtime 流量。LLM_API_KEY 為標準的模型供應商金鑰。",
-      "modelField": "TINFOIL_MODEL — Sage 應使用的 Tinfoil 模型識別碼（例如：glm-5-2）。",
+      "modelField": "TINFOIL_MODEL — Sage 應使用的 Tinfoil 模型識別碼（例如：glm-5-3-flash）。",
       "overviewDesc": "此原型使用 Sage 作為公開的 Agent Runtime，並使用 Tinfoil 作為模型供應商傳輸層。請透過 LLM_* 部署設定來配置模型供應商；系統堆疊會將其映射至 Sage 的 Tinfoil 執行階段。",
       "overviewTitle": "Sage 執行階段概覽",
       "providerField": "LLM_PROVIDER — 此原型請設定為 \"sage\"。"
@@ -2304,7 +2304,7 @@
     "LLM_MODEL": {
       "label": "模型名稱",
       "description": "模型名稱/識別碼",
-      "hint": "Sage 應使用的 Tinfoil 模型識別碼 (例如 \"glm-5-2\")。"
+      "hint": "Sage 應使用的 Tinfoil 模型識別碼 (例如 \"glm-5-3-flash\")。"
     },
     "LLM_API_URL": {
       "label": "API 端點",

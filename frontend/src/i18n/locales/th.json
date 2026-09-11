@@ -1777,7 +1777,7 @@
       "goToPage": "ไปยังหน้า",
       "sageExtra": "ตั้งค่า LLM_API_KEY เป็น Tinfoil key ของคุณจาก {{tinfoilSignupUrl}} โดยระบบจะแมปค่านี้ไปยัง Sage และ local Tinfoil proxy",
       "sageHint": "โปรโตไทป์นี้จะส่ง traffic ของ Agent Runtime ผ่าน Sage และ Tinfoil โดย LLM_API_KEY คือ key มาตรฐานของ Model Provider",
-      "modelField": "TINFOIL_MODEL — ตัวระบุ model ของ Tinfoil ที่ Sage ควรใช้ (ตัวอย่างเช่น: glm-5-2)",
+      "modelField": "TINFOIL_MODEL — ตัวระบุ model ของ Tinfoil ที่ Sage ควรใช้ (ตัวอย่างเช่น: glm-5-3-flash)",
       "overviewDesc": "โปรโตไทป์นี้ใช้ Sage เป็น Agent Runtime สาธารณะ และใช้ Tinfoil เป็นตัวขนส่ง Model Provider ให้กำหนดค่า Model Provider ผ่าน Deployment Settings ของ LLM_* โดยระบบจะแมปค่าเหล่านี้ไปยัง Tinfoil runtime ของ Sage",
       "overviewTitle": "ภาพรวม Sage Runtime",
       "providerField": "LLM_PROVIDER — ตั้งค่าเป็น \"sage\" สำหรับโปรโตไทป์นี้"
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "ชื่อโมเดล",
       "description": "ชื่อ/ตัวระบุโมเดล",
-      "hint": "ตัวระบุโมเดล Tinfoil ที่ Sage ควรใช้ (เช่น \"glm-5-2\")"
+      "hint": "ตัวระบุโมเดล Tinfoil ที่ Sage ควรใช้ (เช่น \"glm-5-3-flash\")"
     },
     "LLM_API_URL": {
       "label": "จุดเชื่อมต่อ API",

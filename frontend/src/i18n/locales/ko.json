@@ -1777,7 +1777,7 @@
       "goToPage": "페이지로 이동",
       "sageExtra": "LLM_API_KEY를 {{tinfoilSignupUrl}}에서 발급받은 Tinfoili 키로 설정하십시오. 스택이 이를 Sage 및 로컬 Tinfoil 프록시에 매핑합니다.",
       "sageHint": "이 프로토타입은 Agent Runtime 트래픽을 Sage 및 Tinfoil을 통해 라우팅합니다. LLM_API_KEY는 표준 Model Provider 키입니다.",
-      "modelField": "TINFOIL_MODEL — Sage가 사용할 Tinfoil 모델 식별자입니다 (예: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — Sage가 사용할 Tinfoil 모델 식별자입니다 (예: glm-5-3-flash).",
       "overviewDesc": "이 프로토타입은 Sage를 공개 Agent Runtime으로, Tinfoil을 Model Provider 전송 계층으로 사용합니다. LLM_* Deployment Settings를 통해 Model Provider를 구성하십시오. 스택이 이를 Sage의 Tinfoil 런타임에 매핑합니다.",
       "overviewTitle": "Sage 런타임 개요",
       "providerField": "LLM_PROVIDER — 이 프로토타입의 경우 \"sage\"로 설정하십시오."
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "모델 이름",
       "description": "모델 이름/식별자",
-      "hint": "Sage가 사용할 Tinfoil 모델 식별자 (예: \"glm-5-2\")"
+      "hint": "Sage가 사용할 Tinfoil 모델 식별자 (예: \"glm-5-3-flash\")"
     },
     "LLM_API_URL": {
       "label": "API 엔드포인트",

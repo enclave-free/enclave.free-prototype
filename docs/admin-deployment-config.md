@@ -51,8 +51,12 @@ Recommended current values in admin deployment config:
 
 - `LLM_PROVIDER=sage`
 - `LLM_API_URL=http://tinfoil-proxy:8089/v1`
-- `LLM_MODEL=glm-5-2`
+- `LLM_MODEL=glm-5-3-flash`
 - `LLM_API_KEY=<tinfoil key>`
+
+For the GLM-5.3 Flash migration, set `TINFOIL_REASONING_EFFORT=low` alongside the
+model in the operator environment. See [migration and verification notes](glm-5-3-flash-migration.md)
+for existing `.env` and generated runtime-file overrides.
 
 These deployment keys are the canonical operator-facing Model Provider configuration. What they affect today:
 

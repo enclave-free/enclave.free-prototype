@@ -1777,7 +1777,7 @@
       "goToPage": "Gå till sida",
       "sageExtra": "Ange LLM_API_KEY till din Tinfoil-nyckel från {{tinfoilSignupUrl}}. Stacken mappar den till Sage och den lokala Tinfoil-proxyn.",
       "sageHint": "Denna prototyp dirigerar Agent Runtime-trafik genom Sage och Tinfoil. LLM_API_KEY är den officiella nyckeln för Model Provider.",
-      "modelField": "TINFOIL_MODEL — Tinfoil-modellens identifierare som Sage ska använda (till exempel: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — Tinfoil-modellens identifierare som Sage ska använda (till exempel: glm-5-3-flash).",
       "overviewDesc": "Denna prototyp använder Sage som den publika Agent Runtime och Tinfoil som transport för Model Provider. Konfigurera Model Provider via LLM_* driftsinställningar; stacken mappar dem till Sages Tinfoil runtime.",
       "overviewTitle": "Översikt av Sage Runtime",
       "providerField": "LLM_PROVIDER — ställs in på \"sage\" för denna prototyp."
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "Modellnamn",
       "description": "Modellnamn/identifierare",
-      "hint": "Tinfoil-modellidentifieraren som Sage ska använda (t.ex. \"glm-5-2\")."
+      "hint": "Tinfoil-modellidentifieraren som Sage ska använda (t.ex. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "API-slutpunkt",

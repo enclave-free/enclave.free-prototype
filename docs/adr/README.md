@@ -36,7 +36,7 @@ Reviewed on 2026-06-15 for the unified model-driven Tool loop hard cut:
 | 0028 Sage owns direct Admin Config writes                               | Anchor decision for conversationally confirmed direct Admin Config writes.                                         |
 | 0029 Native Tool calling with one Tool round                            | Native protocol and hard-cut decisions remain valid; its one-batch constraint is superseded by ADR-0030.           |
 | 0030 Bounded native Tool loop                                           | Anchor decision for model-driven native Tool continuation, provider continuity, silent-stall recovery, and at most six executed Tool batches. |
-| 0031 Default GLM reasoning effort to none                               | Anchor decision for the explicit deployment-level reasoning setting and its measured `none` default.                         |
+| 0031 Default GLM reasoning effort to none                               | Explicit deployment-level reasoning setting; historical `none` default superseded by Flash / `low`.                         |
 | 0032 Test User Sessions reuse the User Conversation module              | Anchor decision for one shared User Conversation execution and UI module with thin logged-in and Admin test harness adapters. |
 | 0033 Model-led autonomy and concise User responses                      | Anchor decision for generic consent, personal-decision, brevity, Tool-stopping, and model-turn separator behavior without semantic answer rewriting. |
 | 0034 Present Conversation Activity for its audience                     | Anchor decision for one retained trace contract with product-facing User Activity and diagnostic Admin Activity. |

@@ -1,6 +1,8 @@
 # Default GLM Reasoning Effort to None
 
-Status: Accepted.
+Status: Partially superseded on September 10, 2026: the model/default pair is now `glm-5-3-flash` / `low`. The explicit deployment-level setting and prohibition on automatic escalation remain accepted. See [migration evidence](../glm-5-3-flash-migration.md).
+
+The decision below records the historical GLM 5.2 / `none` configuration; it is not the current deployment default.
 
 The Enclave Free deployment will send an explicit `reasoning_effort` on every
 native Conversation model request. `TINFOIL_REASONING_EFFORT` is the single

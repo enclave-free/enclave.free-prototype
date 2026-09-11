@@ -1777,7 +1777,7 @@
       "goToPage": "Sayfaya git",
       "sageExtra": "LLM_API_KEY değerini {{tinfoilSignupUrl}} adresindeki Tinfoili anahtarınız olarak ayarlayın. Yığın bunu Sage ve yerel Tinfoil proxy'sine eşler.",
       "sageHint": "Bu prototip, Agent Runtime trafiğini Sage ve Tinfoil üzerinden yönlendirir. LLM_API_KEY, standart Model Sağlayıcı anahtarıdır.",
-      "modelField": "TINFOIL_MODEL — Sage'in kullanması gereken Tinfoil model tanımlayıcısı (örneğin: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — Sage'in kullanması gereken Tinfoil model tanımlayıcısı (örneğin: glm-5-3-flash).",
       "overviewDesc": "Bu prototip, genel Agent Runtime olarak Sage'i ve Model Sağlayıcı taşıyıcısı olarak Tinfoil'i kullanır. Model Sağlayıcıyı LLM_* Dağıtım Ayarları aracılığıyla yapılandırın; yığın bunları Sage'in Tinfoil çalışma zamanına eşler.",
       "overviewTitle": "Sage Çalışma Zamanı Genel Bakış",
       "providerField": "LLM_PROVIDER — bu prototip için \"sage\" olarak ayarlanmalıdır."
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "Model Adı",
       "description": "Model adı/tanımlayıcısı",
-      "hint": "Sage'in kullanması gereken Tinfoil model tanımlayıcısı (örneğin, \"glm-5-2\")."
+      "hint": "Sage'in kullanması gereken Tinfoil model tanımlayıcısı (örneğin, \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "API Uç Noktası",

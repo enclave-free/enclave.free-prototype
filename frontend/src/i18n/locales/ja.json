@@ -1777,7 +1777,7 @@
       "goToPage": "ページへ移動",
       "sageExtra": "LLM_API_KEY に {{tinfoilSignupUrl}} から取得した Tinfoil キーを設定してください。スタックによって Sage およびローカルの Tinfoil プロキシにマッピングされます。",
       "sageHint": "このプロトタイプは、Agent Runtime のトラフィックを Sage と Tinfoil を経由してルーティングします。LLM_API_KEY は、標準的なモデルプロバイダーのキーとなります。",
-      "modelField": "TINFOIL_MODEL — Sage が使用する Tinfoil モデルの識別子です（例: glm-5-2）。",
+      "modelField": "TINFOIL_MODEL — Sage が使用する Tinfoil モデルの識別子です（例: glm-5-3-flash）。",
       "overviewDesc": "このプロトタイプでは、パブリックな Agent Runtime として Sage を、モデルプロバイダーのトランスポートとして Tinfoil を使用します。LLM_* Deployment Settings を通じてモデルプロバイダーを設定してください。スタックによって Sage の Tinfoil ランタイムにマッピングされます。",
       "overviewTitle": "Sage ランタイムの概要",
       "providerField": "LLM_PROVIDER — このプロトタイプでは \"sage\" に設定してください。"
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "モデル名",
       "description": "モデル名/識別子",
-      "hint": "Sage が使用する Tinfoil のモデル識別子 (例: \"glm-5-2\")"
+      "hint": "Sage が使用する Tinfoil のモデル識別子 (例: \"glm-5-3-flash\")"
     },
     "LLM_API_URL": {
       "label": "API エンドポイント",

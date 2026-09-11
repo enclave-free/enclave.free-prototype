@@ -1777,7 +1777,7 @@
       "goToPage": "পেজে যান",
       "sageExtra": "{{tinfoilSignupUrl}} থেকে আপনার Tinfoil key ব্যবহার করে LLM_API_KEY সেট করুন। স্ট্যাকটি এটিকে Sage এবং লোকাল Tinfoil proxy-র সাথে ম্যাপ করে।",
       "sageHint": "এই প্রোটোটাইপটি Agent Runtime ট্রাফিক Sage এবং Tinfoil-এর মাধ্যমে রাউট করে। LLM_API_KEY হলো ক্যানোনিকাল Model Provider key।",
-      "modelField": "TINFOIL_MODEL — Sage যে Tinfoil model identifier ব্যবহার করবে (উদাহরণস্বরূপ: glm-5-2)।",
+      "modelField": "TINFOIL_MODEL — Sage যে Tinfoil model identifier ব্যবহার করবে (উদাহরণস্বরূপ: glm-5-3-flash)।",
       "overviewDesc": "এই প্রোটোটাইপটি পাবলিক Agent Runtime হিসেবে Sage এবং Model Provider transport হিসেবে Tinfoil ব্যবহার করে। LLM_* Deployment Settings-এর মাধ্যমে Model Provider কনফিগার করুন; স্ট্যাকটি সেগুলোকে Sage-এর Tinfoil runtime-এর সাথে ম্যাপ করে।",
       "overviewTitle": "Sage রানটাইম পর্যালোচনা",
       "providerField": "LLM_PROVIDER — এই প্রোটোটাইপের জন্য \"sage\" সেট করুন।"
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "মডেলের নাম",
       "description": "মডেলের নাম/আইডেন্টিফায়ার",
-      "hint": "Sage যে Tinfoil মডেল আইডেন্টিফায়ার ব্যবহার করবে (যেমন, \"glm-5-2\")।"
+      "hint": "Sage যে Tinfoil মডেল আইডেন্টিফায়ার ব্যবহার করবে (যেমন, \"glm-5-3-flash\")।"
     },
     "LLM_API_URL": {
       "label": "API এন্ডপয়েন্ট",

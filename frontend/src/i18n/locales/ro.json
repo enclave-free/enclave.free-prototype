@@ -1794,7 +1794,7 @@
       "goToPage": "Mergi la pagina",
       "sageExtra": "Setați LLM_API_KEY cu cheia dvs. Tinfoil de la {{tinfoilSignupUrl}}. Stack-ul o mapează către Sage și proxy-ul local Tinfoil.",
       "sageHint": "Acest prototip direcționează traficul Agent Runtime prin Sage și Tinfoil. LLM_API_KEY este cheia canonică a Model Provider-ului.",
-      "modelField": "TINFOIL_MODEL — identificatorul modelului Tinfoil pe care ar trebui să îl folosească Sage (de exemplu: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — identificatorul modelului Tinfoil pe care ar trebui să îl folosească Sage (de exemplu: glm-5-3-flash).",
       "overviewDesc": "Acest prototip folosește Sage ca Agent Runtime public și Tinfoil ca transport Model Provider. Configurați Model Provider-ul prin Setările de Deployment LLM_*; stack-ul le mapează către runtime-ul Tinfoil al Sage.",
       "overviewTitle": "Prezentare generală runtime Sage",
       "providerField": "LLM_PROVIDER — setat la \"sage\" pentru acest prototip."
@@ -2320,7 +2320,7 @@
     "LLM_MODEL": {
       "label": "Nume Model",
       "description": "Nume/identificator model",
-      "hint": "Identificatorul modelului Tinfoil pe care ar trebui să îl folosească Sage (ex: \"glm-5-2\")."
+      "hint": "Identificatorul modelului Tinfoil pe care ar trebui să îl folosească Sage (ex: \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Endpoint API",

@@ -1874,7 +1874,7 @@
       "goToPage": "Aller à la page",
       "sageExtra": "Définissez LLM_API_KEY sur votre clé Tinfoil depuis {{tinfoilSignupUrl}}. La pile la mappe vers Sage et le proxy Tinfoil local.",
       "sageHint": "Ce prototype achemine le trafic de l'exécution de l'agent via Sage et Tinfoil. LLM_API_KEY est la clé canonique du fournisseur de modèle.",
-      "modelField": "TINFOIL_MODEL — identifiant du modèle Tinfoil que Sage doit utiliser (par exemple : glm-5-2).",
+      "modelField": "TINFOIL_MODEL — identifiant du modèle Tinfoil que Sage doit utiliser (par exemple : glm-5-3-flash).",
       "overviewDesc": "Ce prototype utilise Sage comme Agent Runtime public et Tinfoil comme transport du fournisseur de modèle. Configurez le fournisseur de modèle via les paramètres de déploiement LLM_* ; la pile les mappe vers le runtime Tinfoil de Sage.",
       "overviewTitle": "Aperçu du runtime Sage",
       "providerField": "LLM_PROVIDER — définissez-le sur « sage » pour ce prototype."
@@ -2314,7 +2314,7 @@
     "LLM_MODEL": {
       "label": "Nom du modèle",
       "description": "Nom/identifiant du modèle",
-      "hint": "L'identifiant de modèle Tinfoil que Sage doit utiliser (par ex. « glm-5-2 »)."
+      "hint": "L'identifiant de modèle Tinfoil que Sage doit utiliser (par ex. « glm-5-3-flash »)."
     },
     "LLM_API_URL": {
       "label": "Point de terminaison de l'API",

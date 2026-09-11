@@ -1777,7 +1777,7 @@
       "goToPage": "Siirry sivulle",
       "sageExtra": "Aseta LLM_API_KEY Tinfoil-avaimellesi osoitteesta {{tinfoilSignupUrl}}. Pinon (stack) avulla se yhdistetään Sageen ja paikalliseen Tinfoil-välityspalvelimeen.",
       "sageHint": "Tämä prototyyppi reitittää Agent Runtime -liikenteen Sage- ja Tinfoil-palveluiden kautta. LLM_API_KEY on virallinen Model Provider -avain.",
-      "modelField": "TINFOIL_MODEL — Tinfoil-mallin tunniste, jota Sagen tulee käyttää (esimerkiksi: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — Tinfoil-mallin tunniste, jota Sagen tulee käyttää (esimerkiksi: glm-5-3-flash).",
       "overviewDesc": "Tämä prototyyppi käyttää Sagea julkisena Agent Runtimeina ja Tinfoilia Model Provider -kuljetuskerroksena. Määritä Model Provider LLM_* -asennusasetusten kautta; pino yhdistää ne Sagen Tinfoil-ajonaikaiseen ympäristöön.",
       "overviewTitle": "Sage Runtime -yleiskatsaus",
       "providerField": "LLM_PROVIDER — aseta arvoon \"sage\" tässä prototyypissä."
@@ -2303,7 +2303,7 @@
     "LLM_MODEL": {
       "label": "Mallin nimi",
       "description": "Mallin nimi/tunniste",
-      "hint": "Tinfoil-mallin tunniste, jota Sage:n tulee käyttää (esim. \"glm-5-2\")."
+      "hint": "Tinfoil-mallin tunniste, jota Sage:n tulee käyttää (esim. \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "API-päätepiste",

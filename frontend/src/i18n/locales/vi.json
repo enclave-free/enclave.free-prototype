@@ -1779,7 +1779,7 @@
       "goToPage": "Đi đến trang",
       "sageExtra": "Đặt LLM_API_KEY thành khóa Tinfoil của bạn từ {{tinfoilSignupUrl}}. Hệ thống sẽ ánh xạ nó tới Sage và proxy Tinfoil cục bộ.",
       "sageHint": "Bản mẫu này điều hướng lưu lượng Agent Runtime thông qua Sage và Tinfoil. LLM_API_KEY là khóa Nhà cung cấp Mô hình chuẩn.",
-      "modelField": "TINFOIL_MODEL — định danh mô hình Tinfoil mà Sage nên sử dụng (ví dụ: glm-5-2).",
+      "modelField": "TINFOIL_MODEL — định danh mô hình Tinfoil mà Sage nên sử dụng (ví dụ: glm-5-3-flash).",
       "overviewDesc": "Bản mẫu này sử dụng Sage làm Agent Runtime công khai và Tinfoil làm phương thức truyền tải của Nhà cung cấp Mô hình. Cấu hình Nhà cung cấp Mô hình thông qua Cài đặt Triển khai LLM_*; hệ thống sẽ ánh xạ chúng tới runtime Tinfoil của Sage.",
       "overviewTitle": "Tổng quan về Runtime Sage",
       "providerField": "LLM_PROVIDER — đặt thành \"sage\" cho bản mẫu này."
@@ -2305,7 +2305,7 @@
     "LLM_MODEL": {
       "label": "Tên Model",
       "description": "Tên/định danh Model",
-      "hint": "Định danh model Tinfoil mà Sage nên sử dụng (ví dụ: \"glm-5-2\")."
+      "hint": "Định danh model Tinfoil mà Sage nên sử dụng (ví dụ: \"glm-5-3-flash\")."
     },
     "LLM_API_URL": {
       "label": "Điểm cuối API",
